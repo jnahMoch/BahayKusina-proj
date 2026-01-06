@@ -1,0 +1,141 @@
+{
+  "meals": [
+    {
+      "id": "meal1",
+      "title": "Ultimate Breakfast Package",
+      "description": "Start your day right with a hearty Filipino breakfast. Includes pandesal, champorado, and fried egg.",
+      "price": 150,
+      "vendorName": "Nanay's Kitchen",
+      "imageUrl": "assets/images/food_package_1.jpg",
+      "type": "Breakfast",
+      "stockLeft": 20,
+      "rating": 4.8,
+      "reviews": 245
+    },
+    {
+      "id": "meal2",
+      "title": "Lunch Value Pack",
+      "description": "Complete lunch meal for the whole family. Rice, adobo, vegetables, and soup.",
+      "price": 350,
+      "vendorName": "Nanay's Kitchen",
+      "imageUrl": "assets/images/food_package_2.jpg",
+      "type": "Lunch",
+      "stockLeft": 15,
+      "rating": 4.9,
+      "reviews": 389
+    },
+    {
+      "id": "meal3",
+      "title": "Merienda Bundle",
+      "description": "Perfect afternoon snacks for the family. Includes turon, lumpia, and bibingka.",
+      "price": 180,
+      "vendorName": "Lola's Lutong Bahay",
+      "imageUrl": "assets/images/food_package_1.jpg",
+      "type": "Merienda",
+      "stockLeft": 8,
+      "rating": 4.7,
+      "reviews": 156
+    },
+    {
+      "id": "meal4",
+      "title": "Family Dinner Feast",
+      "description": "A satisfying meal for four people. Grilled fish, rice, vegetables, and special sauce.",
+      "price": 499,
+      "vendorName": "Ate's Specialties",
+      "imageUrl": "assets/images/food_package_2.jpg",
+      "type": "Dinner",
+      "stockLeft": 12,
+      "rating": 4.9,
+      "reviews": 567
+    },
+    {
+      "id": "meal5",
+      "title": "Sinigang Meal",
+      "description": "Traditional Filipino soup dish with pork and vegetables.",
+      "price": 280,
+      "vendorName": "Mama's Cooking",
+      "imageUrl": "assets/images/food_package_1.jpg",
+      "type": "Lunch",
+      "stockLeft": 18,
+      "rating": 4.6,
+      "reviews": 234
+    },
+    {
+      "id": "meal6",
+      "title": "Fried Chicken Combo",
+      "description": "Crispy fried chicken with rice and coleslaw.",
+      "price": 220,
+      "vendorName": "Kusina Lola",
+      "imageUrl": "assets/images/food_package_1.jpg",
+      "type": "Lunch",
+      "stockLeft": 25,
+      "rating": 4.8,
+      "reviews": 412
+    }
+  ],
+  "users": [
+    {
+      "uid": "test_customer_001",
+      "email": "customer@test.com",
+      "displayName": "Juan Dela Cruz",
+      "role": "customer",
+      "address": "123 Sampaguita St., Quezon City",
+      "phone": "09171234567",
+      "createdAt": "2025-01-01T08:00:00Z",
+      "updatedAt": "2025-01-04T10:30:00Z"
+    },
+    {
+      "uid": "test_vendor_001",
+      "email": "vendor@test.com",
+      "displayName": "Maria Santos",
+      "role": "vendor",
+      "businessName": "Nanay's Kitchen",
+      "address": "456 Rizal Ave., Manila",
+      "phone": "09189876543",
+      "createdAt": "2024-12-15T08:00:00Z",
+      "updatedAt": "2025-01-04T09:15:00Z"
+    }
+  ],
+  "orders": [
+    {
+      "uid": "test_customer_001",
+      "orderId": "#ORD-001",
+      "orderDate": "2025-01-04T07:30:00Z",
+      "items": [
+        {
+          "mealTitle": "Ultimate Breakfast Package",
+          "quantity": 2,
+          "pricePerUnit": 150
+        }
+      ],
+      "totalAmount": 350,
+      "status": "outfordelivery",
+      "deliveryAddress": "123 Sampaguita St., Quezon City",
+      "contactNumber": "0919-345-6789",
+      "paymentMethod": "Cash on Delivery",
+      "riderName": "Mark Santos",
+      "riderEta": "15 mins",
+      "specialInstructions": "Ring doorbell, do not leave at gate"
+    },
+    {
+      "uid": "test_customer_001",
+      "orderId": "#ORD-002",
+      "orderDate": "2025-01-03T11:00:00Z",
+      "items": [
+        {
+          "mealTitle": "Lunch Value Pack",
+          "quantity": 1,
+          "pricePerUnit": 350
+        }
+      ],
+      "totalAmount": 400,
+      "status": "delivered",
+      "deliveryAddress": "456 Magsaysay Ave., Manila",
+      "contactNumber": "0919-876-5432",
+      "paymentMethod": "GCash",
+      "riderName": "Carlos Rodriguez",
+      "riderEta": "Delivered",
+      "specialInstructions": ""
+    }
+  ]
+}
