@@ -1,17 +1,16 @@
-// lib/screens/checkout_page.dart
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/orders_provider.dart';
 import '../models/order.dart';
+import '../services/location_service.dart';
+import '../services/geocoding_service.dart';
+import '../services/notification_service.dart';
 import 'order_confirmation_page.dart';
 
 class CheckoutPage extends StatefulWidget {
-  final CartProvider cartProvider;
-
-  const CheckoutPage({
-    super.key,
-    required this.cartProvider,
-  });
+  const CheckoutPage({super.key});
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
@@ -26,7 +25,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
   late TextEditingController _contactController;
   late TextEditingController _instructionsController;
 
+  // Map-related state
+  GoogleMapController? _mapController;
+  LatLng? _selectedLocation;
+  final LocationService _locationService = LocationService();
+  final GeocodingService _geocodingService = GeocodingService();
+  bool _isLoadingLocation = false;
+  bool _isGeocodingAddress = false;
+  final Set<Marker> _markers = {};
+
   String _selectedPaymentMethod = 'Cash on Delivery';
+  String _addressLabel = 'Home'; // New field for marking address
 
   final List<String> _paymentMethods = [
     'Cash on Delivery',
@@ -40,6 +49,79 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _addressController = TextEditingController(text: '123 Mabini St., Barangay San Juan, Manila');
     _contactController = TextEditingController(text: '+63 917 123 4567');
     _instructionsController = TextEditingController();
+    
+    // Initialize location after a short delay to allow map to be ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _geocodeAddress();
+    });
+  }
+
+  void _updateMarker(LatLng position) {
+    setState(() {
+      _selectedLocation = position;
+      _markers.clear();
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('delivery_location'),
+          position: position,
+          draggable: true,
+          onDragEnd: (newPosition) {
+            _reverseGeocode(newPosition);
+          },
+        ),
+      );
+    });
+    
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLng(position),
+    );
+  }
+
+  Future<void> _geocodeAddress() async {
+    if (_addressController.text.isEmpty) return;
+    
+    setState(() => _isGeocodingAddress = true);
+    
+    final location = await _geocodingService.getCoordinatesFromAddress(_addressController.text);
+    
+    if (location != null) {
+      _updateMarker(location);
+    }
+    
+    setState(() => _isGeocodingAddress = false);
+  }
+
+  Future<void> _reverseGeocode(LatLng position) async {
+    setState(() => _isGeocodingAddress = true);
+    
+    final address = await _geocodingService.getAddressFromCoordinates(position);
+    
+    if (address != null) {
+      _addressController.text = address;
+    }
+    
+    _updateMarker(position);
+    setState(() => _isGeocodingAddress = false);
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() => _isLoadingLocation = true);
+    
+    final location = await _locationService.getCurrentLocation();
+    
+    if (location != null) {
+      final address = await _geocodingService.getAddressFromCoordinates(location);
+      if (address != null) {
+        _addressController.text = address;
+      }
+      _updateMarker(location);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not get current location. Please check permissions.')),
+      );
+    }
+    
+    setState(() => _isLoadingLocation = false);
   }
 
   @override
@@ -51,6 +133,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _placeOrder() {
+    final cartProvider = context.read<CartProvider>();
     if (_addressController.text.isEmpty || _contactController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in delivery details')),
@@ -62,7 +145,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final orderId = '#ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 6)}';
 
     // Create order items from cart
-    final orderItems = widget.cartProvider.items
+    final orderItems = cartProvider.items
         .map((cartItem) => OrderItem(
               mealTitle: cartItem.meal.title,
               quantity: cartItem.quantity,
@@ -75,38 +158,51 @@ class _CheckoutPageState extends State<CheckoutPage> {
       orderId: orderId,
       orderDate: DateTime.now(),
       items: orderItems,
-      totalAmount: widget.cartProvider.totalPrice + 50,
+      totalAmount: cartProvider.totalPrice + 50,
       status: OrderStatus.pending,
       deliveryAddress: _addressController.text,
       contactNumber: _contactController.text,
       paymentMethod: _selectedPaymentMethod,
       riderName: null,
       riderEta: null,
+      deliveryCoordinates: _selectedLocation,
     );
 
     // Add order to OrdersProvider
     OrdersProvider().addOrder(order);
+
+    // Trigger Notification
+    NotificationService().addNotification(NotificationModel(
+      title: 'Order Placed!',
+      message: 'Your order $orderId has been successfully placed and is being processed.',
+      time: 'Just now',
+      icon: Icons.shopping_bag_rounded,
+      iconColor: primaryOrange,
+    ));
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => OrderConfirmationPage(
           orderId: orderId,
-          totalAmount: widget.cartProvider.totalPrice + 50,
+          totalAmount: cartProvider.totalPrice + 50,
           deliveryAddress: _addressController.text,
           paymentMethod: _selectedPaymentMethod,
           estimatedDelivery: '30-45 minutes',
-          cartItems: widget.cartProvider.items,
+          cartItems: cartProvider.items,
+          deliveryCoordinates: _selectedLocation,
         ),
       ),
     );
 
-    widget.cartProvider.clearCart();
+    cartProvider.clearCart();
+    cartProvider.clearCart(); // Clear from local too (redundant but safe)
   }
 
   @override
   Widget build(BuildContext context) {
-    final subtotal = widget.cartProvider.totalPrice;
+    final cartProvider = context.watch<CartProvider>();
+    final subtotal = cartProvider.totalPrice;
     final deliveryFee = 50;
     final total = subtotal + deliveryFee;
 
@@ -291,18 +387,163 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Widget _buildAddressField() {
-    return TextField(
-      controller: _addressController,
-      maxLines: 2,
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: Colors.grey.shade100,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
+    return Column(
+      children: [
+        TextField(
+          controller: _addressController,
+          maxLines: 2,
+          onSubmitted: (_) => _geocodeAddress(),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            hintText: 'Enter your delivery address',
+            suffixIcon: IconButton(
+              icon: _isLoadingLocation 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.my_location, color: primaryOrange),
+              onPressed: _isLoadingLocation ? null : _getCurrentLocation,
+              tooltip: 'Use current location',
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
+        const SizedBox(height: 12),
+        _buildAddressLabels(),
+        const SizedBox(height: 12),
+        Container(
+          height: 220,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Stack(
+            children: [
+              GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: _selectedLocation ?? const LatLng(14.5995, 120.9842),
+                  zoom: 15,
+                ),
+                onMapCreated: (controller) => _mapController = controller,
+                markers: _markers,
+                onCameraIdle: () async {
+                  final latLng = await _mapController?.getVisibleRegion();
+                  if (latLng != null) {
+                    final center = LatLng(
+                      (latLng.northeast.latitude + latLng.southwest.latitude) / 2,
+                      (latLng.northeast.longitude + latLng.southwest.longitude) / 2,
+                    );
+                    _reverseGeocode(center);
+                  }
+                },
+                onTap: (position) => _reverseGeocode(position),
+                myLocationButtonEnabled: false,
+                zoomControlsEnabled: false,
+                mapToolbarEnabled: false,
+              ),
+              // Center Pin Overlay
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 35),
+                  child: Icon(
+                    Icons.location_on,
+                    color: primaryOrange,
+                    size: 40,
+                  ),
+                ),
+              ),
+              if (_isGeocodingAddress)
+                Container(
+                  color: Colors.black.withOpacity(0.1),
+                  child: const Center(
+                    child: CircularProgressIndicator(color: primaryOrange),
+                  ),
+                ),
+              Positioned(
+                bottom: 12,
+                right: 12,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'center_map',
+                      backgroundColor: Colors.white,
+                      child: const Icon(Icons.center_focus_strong, color: primaryOrange),
+                      onPressed: () {
+                        if (_selectedLocation != null) {
+                          _mapController?.animateCamera(
+                            CameraUpdate.newLatLng(_selectedLocation!),
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'confirm_pin',
+                      backgroundColor: primaryOrange,
+                      child: const Icon(Icons.check, color: Colors.white),
+                      onPressed: () async {
+                        final latLng = await _mapController?.getVisibleRegion();
+                        if (latLng != null) {
+                          final center = LatLng(
+                            (latLng.northeast.latitude + latLng.southwest.latitude) / 2,
+                            (latLng.northeast.longitude + latLng.southwest.longitude) / 2,
+                          );
+                          _reverseGeocode(center);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Text(
+            'Move map and tap checkmark to mark exact location',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddressLabels() {
+    final labels = ['Home', 'Office', 'Other'];
+    return Row(
+      children: labels.map((label) {
+        final isSelected = _addressLabel == label;
+        return Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: ChoiceChip(
+            label: Text(label),
+            selected: isSelected,
+            onSelected: (selected) {
+              if (selected) {
+                setState(() => _addressLabel = label);
+              }
+            },
+            selectedColor: primaryOrange.withOpacity(0.2),
+            labelStyle: TextStyle(
+              color: isSelected ? primaryOrange : Colors.black87,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+            backgroundColor: Colors.grey.shade100,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: isSelected ? primaryOrange : Colors.transparent,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -340,9 +581,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Widget _buildOrderSummary() {
+    final cartProvider = context.read<CartProvider>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: widget.cartProvider.items.map((cartItem) {
+      children: cartProvider.items.map((cartItem) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Row(

@@ -6,6 +6,9 @@ import '../models/auth_user.dart';
 import '../providers/orders_provider.dart';
 import 'login_page.dart';
 import 'edit_profile_page.dart';
+import 'addresses_page.dart';
+import 'notifications.dart';
+import 'settings_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -334,8 +337,9 @@ class _ProfilePageState extends State<ProfilePage> {
           title: 'My Addresses',
           subtitle: 'Manage delivery addresses',
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('My Addresses coming soon!')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AddressesPage()),
             );
           },
         ),
@@ -344,8 +348,9 @@ class _ProfilePageState extends State<ProfilePage> {
           title: 'Notifications',
           subtitle: 'Manage notification preferences',
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Notifications coming soon!')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NotificationsPage()),
             );
           },
         ),
@@ -354,8 +359,9 @@ class _ProfilePageState extends State<ProfilePage> {
           title: 'Settings',
           subtitle: 'App preferences and settings',
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Settings coming soon!')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsPage()),
             );
           },
         ),

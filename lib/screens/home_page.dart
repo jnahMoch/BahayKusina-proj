@@ -1,6 +1,5 @@
-// lib/screens/home_page.dart (Enhanced)
-
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'meal_card.dart';
 import 'orders_page.dart';
 import 'profile_page.dart';
@@ -22,54 +21,48 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late CartProvider _cartProvider;
-  final List<Map<String, dynamic>> mealPackages = [
-    {
-      'type': 'Breakfast',
-      'title': 'Ultimate Breakfast Package',
-      'vendor': "Nanay's Kitchen",
-      'desc': 'Start your day right with a hearty Filipino breakfast',
-      'price': 150,
-      'left': 20,
-      'image': 'assets/images/food_package_1.jpg',
-    },
-    {
-      'type': 'Lunch',
-      'title': 'Lunch Value Pack',
-      'vendor': "Nanay's Kitchen",
-      'desc': 'Complete lunch meal for the whole family',
-      'price': 350,
-      'left': 15,
-      'image': 'assets/images/food_package_2.jpg',
-    },
-    {
-      'type': 'Merienda',
-      'title': 'Merienda Bundle',
-      'vendor': "Lola's Lutong Bahay",
-      'desc': 'Perfect afternoon snacks for the family',
-      'price': 180,
-      'left': 8,
-      'image': 'assets/images/food_package_1.jpg',
-    },
-    {
-      'type': 'Dinner',
-      'title': 'Family Dinner Feast',
-      'vendor': "Ate's Specialties",
-      'desc': 'A satisfying meal for four, ready to serve',
-      'price': 499,
-      'left': 12,
-      'image': 'assets/images/food_package_2.jpg',
-    },
+  final List<MealPackage> mealPackages = [
+    const MealPackage(
+      type: 'Breakfast',
+      title: 'Ultimate Breakfast Package',
+      vendor: "Nanay's Kitchen",
+      desc: 'Start your day right with a hearty Filipino breakfast',
+      price: 150,
+      left: 20,
+      imageUrl: 'assets/images/food_package_1.jpg',
+    ),
+    const MealPackage(
+      type: 'Lunch',
+      title: 'Lunch Value Pack',
+      vendor: "Nanay's Kitchen",
+      desc: 'Complete lunch meal for the whole family',
+      price: 350,
+      left: 15,
+      imageUrl: 'assets/images/food_package_2.jpg',
+    ),
+    const MealPackage(
+      type: 'Merienda',
+      title: 'Merienda Bundle',
+      vendor: "Lola's Lutong Bahay",
+      desc: 'Perfect afternoon snacks for the family',
+      price: 180,
+      left: 8,
+      imageUrl: 'assets/images/food_package_1.jpg',
+    ),
+    const MealPackage(
+      type: 'Dinner',
+      title: 'Family Dinner Feast',
+      vendor: "Ate's Specialties",
+      desc: 'A satisfying meal for four, ready to serve',
+      price: 499,
+      left: 12,
+      imageUrl: 'assets/images/food_package_2.jpg',
+    ),
   ];
 
   @override
-  void initState() {
-    super.initState();
-    _cartProvider = CartProvider();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final cartProvider = context.watch<CartProvider>();
     const List<String> categories = [
       'All',
       'Breakfast',
@@ -79,156 +72,135 @@ class _HomePageState extends State<HomePage> {
       'Dessert'
     ];
 
-    return DefaultTabController(
-      length: categories.length,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8F8F8),
-        body: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) {
-            return <Widget>[
-              SliverAppBar(
-                expandedHeight: 200.0,
-                floating: true,
-                pinned: true,
-                snap: true,
-                automaticallyImplyLeading: false,
-                leading: null,
-                elevation: 0,
-                backgroundColor: HomePage.primaryOrange,
-                flexibleSpace: FlexibleSpaceBar(
-                  collapseMode: CollapseMode.pin,
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [HomePage.primaryOrange, HomePage.secondaryOrange],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: Stack(
-                      children: [
-                        Positioned(
-                          top: MediaQuery.of(context).padding.top + 10,
-                          left: 20,
-                          right: 20,
-                          child: _buildHeaderContent(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(135.0),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                        child: _buildSearchBar(),
-                      ),
-                      TabBar(
-                        isScrollable: true,
-                        indicatorColor: Colors.transparent,
-                        dividerColor: Colors.transparent,
-                        labelColor: Colors.white,
-                        unselectedLabelColor: Colors.white.withOpacity(0.7),
-                        tabAlignment: TabAlignment.start,
-                        padding: const EdgeInsets.only(left: 15, bottom: 8),
-                        tabs: categories.map((name) => Tab(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8.0),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20.0),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
-                            ),
-                            child: Text(name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                          ),
-                        )).toList(),
-                      ),
-                    ],
-                  ),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with Gradient and Search
+            Container(
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 10,
+                bottom: 20,
+              ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [HomePage.primaryOrange, Color(0xFFFF4800)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
-            ];
-          },
-          body: TabBarView(
-            children: categories.map((category) {
-              final filteredPackages = category == 'All'
-                  ? mealPackages
-                  : mealPackages.where((meal) => meal['type'] == category).toList();
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildHeaderContent(context, cartProvider),
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildSearchBar(),
+                  ),
+                ],
+              ),
+            ),
 
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 10.0),
-                itemCount: filteredPackages.length + 1,
+            // Category Selector
+            Container(
+              height: 60,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: categories.length,
                 itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 15, top: 5),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Available Packages',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                          ),
-                          Text(
-                            'From local home-based vendors in your area',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                          ),
-                        ],
+                  final category = categories[index];
+                  final isSelected = category == 'All';
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected ? HomePage.primaryOrange : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected ? null : Border.all(color: Colors.grey.shade300),
                       ),
-                    );
-                  }
-
-                  final mealMap = filteredPackages[index - 1];
-                  final mealPackage = MealPackage(
-                    type: mealMap['type'] as String,
-                    title: mealMap['title'] as String,
-                    vendor: mealMap['vendor'] as String,
-                    desc: mealMap['desc'] as String,
-                    price: mealMap['price'] as int,
-                    left: mealMap['left'] as int,
-                    imageUrl: mealMap['image'] as String,
-                  );
-
-                  return MealCard(
-                    meal: mealPackage,
-                    cartProvider: _cartProvider,
-                    onOrderAdded: () {
-                      setState(() {});
-                    },
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {},
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: Text(
+                              category,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   );
                 },
-              );
-            }).toList(),
-          ),
+              ),
+            ),
+
+            // Section Header
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text(
+                'Available Packages',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'From local home-based vendors',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ),
+
+            // Meal List
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+              itemCount: mealPackages.length,
+              itemBuilder: (context, index) {
+                return MealCard(
+                  meal: mealPackages[index],
+                  cartProvider: cartProvider,
+                );
+              },
+            ),
+          ],
         ),
-        bottomNavigationBar: _buildBottomNavBar(context),
       ),
+      bottomNavigationBar: _buildBottomNavBar(context),
     );
   }
 
-  Widget _buildHeaderContent() {
+  Widget _buildHeaderContent(BuildContext context, CartProvider cartProvider) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white24, width: 2),
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  'assets/images/bahay_kusina_logo.png',
-                  width: 42,
-                  height: 42,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.restaurant, color: Colors.white),
-                ),
-              ),
+            const Icon(
+              Icons.bakery_dining_outlined,
+              color: Colors.white,
+              size: 40,
             ),
             const SizedBox(width: 12),
             Column(
@@ -239,12 +211,17 @@ class _HomePageState extends State<HomePage> {
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 20,
+                    fontSize: 22,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 Text(
-                  "Home-Cooked Meals",
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  "Meal Packages",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ],
             ),
@@ -252,105 +229,86 @@ class _HomePageState extends State<HomePage> {
         ),
         Row(
           children: [
-            _buildHeaderIcon(Icons.notifications_none, true),
-            const SizedBox(width: 8),
-            _buildHeaderIcon(Icons.shopping_bag_outlined, false),
+            _buildHeaderIcon(context, Icons.shopping_bag_outlined, false, cartProvider),
+            const SizedBox(width: 5),
+            _buildHeaderIcon(context, Icons.notifications_none_outlined, true, cartProvider),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildHeaderIcon(IconData icon, bool hasBadge) {
-    final notificationService = NotificationService();
-    return Stack(
-      children: [
-        IconButton(
-          icon: Icon(icon, color: Colors.white, size: 26),
-          onPressed: () {
-            if (hasBadge) {
-              // This is the notifications icon - open notifications
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NotificationsPage()),
-              );
-            } else {
-              // This is the shopping bag icon - open cart
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => CartPage(
-                    cartProvider: _cartProvider,
-                    onCheckout: () {
-                      // Handle checkout
-                      _cartProvider.clearCart();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Order placed successfully!',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          backgroundColor: Color(0xFF4CAF50),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      setState(() {});
-                    },
-                  ),
-                ),
-              ).then((_) {
-                setState(() {});
-              });
-            }
-          },
-        ),
-        if (hasBadge && notificationService.unreadCount > 0)
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: const BoxDecoration(
-                color: HomePage.accentRed,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  notificationService.unreadCount.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+  Widget _buildHeaderIcon(BuildContext context, IconData icon, bool hasBadge, CartProvider cartProvider) {
+    return Consumer<NotificationService>(
+      builder: (context, notificationService, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              icon: Icon(icon, color: Colors.white, size: 28),
+              onPressed: () {
+                if (hasBadge) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const NotificationsPage()),
+                  );
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CartPage()),
+                  );
+                }
+              },
             ),
-          )
-        else if (!hasBadge && _cartProvider.itemCount > 0)
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: const BoxDecoration(
-                color: HomePage.accentRed,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  _cartProvider.itemCount.toString(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+            if (hasBadge && notificationService.unreadCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: HomePage.accentRed,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Center(
+                    child: Text(
+                      notificationService.unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else if (!hasBadge && cartProvider.totalQuantity > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: HomePage.accentRed,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Center(
+                    child: Text(
+                      cartProvider.totalQuantity.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          )
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -359,20 +317,20 @@ class _HomePageState extends State<HomePage> {
       height: 50,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: const TextField(
         decoration: InputDecoration(
-          hintText: "Search your favorite home-cooked meal...",
-          hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-          prefixIcon: Icon(Icons.search_rounded, color: HomePage.primaryOrange),
+          hintText: "Search meal packages...",
+          hintStyle: TextStyle(color: Colors.grey, fontSize: 16),
+          prefixIcon: Icon(Icons.search, color: Colors.grey),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(vertical: 15),
         ),
@@ -385,26 +343,24 @@ class _HomePageState extends State<HomePage> {
       currentIndex: 0,
       elevation: 20,
       selectedItemColor: HomePage.primaryOrange,
-      unselectedItemColor: Colors.grey[400],
+      unselectedItemColor: Colors.grey[600],
       showUnselectedLabels: true,
       type: BottomNavigationBarType.fixed,
       backgroundColor: Colors.white,
       selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
       items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Profile'),
+        BottomNavigationBarItem(icon: Icon(Icons.home_outlined, size: 28), activeIcon: Icon(Icons.home, size: 28), label: 'Home'),
+        BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_outlined, size: 28), activeIcon: Icon(Icons.shopping_bag, size: 28), label: 'Orders'),
+        BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded, size: 28), activeIcon: Icon(Icons.person, size: 28), label: 'Profile'),
       ],
       onTap: (index) {
         if (index == 0) {
-          // Stay on Home
         } else if (index == 1) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const OrdersPage()),
           );
         } else if (index == 2) {
-          // Navigate to Profile
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const ProfilePage()),

@@ -5,6 +5,8 @@ import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/welcome_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/cart_provider.dart';
+import 'providers/orders_provider.dart';
 import 'services/notification_service.dart';
 
 void main() async {
@@ -13,7 +15,6 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Initialize auth provider (checkAuthStatus is called in constructor)
   final authProvider = AuthProvider();
 
   runApp(BahayKusinaApp(authProvider: authProvider));
@@ -30,6 +31,8 @@ class BahayKusinaApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => NotificationService()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => OrdersProvider()),
       ],
       child: MaterialApp(
         title: 'BahayKusina',

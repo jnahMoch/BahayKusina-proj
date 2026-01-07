@@ -296,6 +296,7 @@ class _OrdersPageState extends State<OrdersPage> {
                         riderName: order.riderName ?? 'Pending Assignment',
                         eta: order.riderEta ?? 'Calculating...',
                         deliveryAddress: order.deliveryAddress,
+                        deliveryLocation: order.deliveryCoordinates,
                       ),
                     ),
                   );
