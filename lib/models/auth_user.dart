@@ -37,10 +37,14 @@ class AuthUser {
     fullName: json['fullName'] as String? ?? '',
     phone: json['phone'] as String? ?? '',
     address: json['address'] as String? ?? '',
-    role: json['role'] == 'vendor' ? UserRole.vendor : UserRole.customer,
+    role: (json['role']?.toString().toLowerCase().trim() == 'vendor')
+        ? UserRole.vendor
+        : UserRole.customer,
     createdAt: json['createdAt'] is String
         ? DateTime.parse(json['createdAt'] as String)
-        : (json['createdAt'] as DateTime? ?? DateTime.now()),
+        : (json['createdAt'] is DateTime
+              ? json['createdAt'] as DateTime
+              : DateTime.now()),
   );
 
   /// Create a copy with modifications

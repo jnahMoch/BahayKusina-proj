@@ -1,9 +1,10 @@
 // lib/screens/profile_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/auth_user.dart';
-import '../providers/orders_provider.dart';
+import '../services/firestore_service.dart';
 import 'login_page.dart';
 import 'edit_profile_page.dart';
 
@@ -17,46 +18,56 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // We will assume OrdersProvider is also provided at the root
-  // or we need to keep using it as is if it's singleton-based (but providers usually aren't).
-  // Checking previous code: _ordersProvider = OrdersProvider(); suggests it might be singleton or just a class.
-  // But `lib/providers/` usually suggests Provider package.
-  // Let's check `orders_provider.dart` later if needed, but for now lets focus on Auth.
-
-  late OrdersProvider _ordersProvider;
-  late int _totalOrders;
-  late int _totalSpent;
+  final FirestoreService _firestoreService = FirestoreService();
+  int _totalOrders = 0;
+  int _totalSpent = 0;
+  bool _isLoadingStats = true;
 
   @override
   void initState() {
     super.initState();
-    _ordersProvider = OrdersProvider(); // Keeping this as is for now if it works independently
-    _calculateStats();
+    _fetchStats();
   }
 
-  void _calculateStats() {
-    final orders = _ordersProvider.orders;
-    _totalOrders = orders.length;
-    _totalSpent = orders.fold(0, (sum, order) => sum + order.totalAmount);
+  Future<void> _fetchStats() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.currentUser != null) {
+      final orders = await _firestoreService.getUserOrders(
+        authProvider.currentUser!.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _totalOrders = orders.length;
+          _totalSpent = orders.fold(0, (sum, order) => sum + order.totalAmount);
+          _isLoadingStats = false;
+        });
+      }
+    } else {
+      setState(() => _isLoadingStats = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch AuthProvider for changes
     final authProvider = context.watch<AuthProvider>();
     final user = authProvider.currentUser;
 
     if (user == null) {
       return Scaffold(
         body: Center(
-          child: ElevatedButton(
-            onPressed: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-              );
-            },
-            child: const Text('Go to Login'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text("You are not logged in"),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                ),
+                child: const Text('Go to Login'),
+              ),
+            ],
           ),
         ),
       );
@@ -79,31 +90,26 @@ class _ProfilePageState extends State<ProfilePage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        centerTitle: false,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // User Account Section
-            _buildAccountSection(user),
-            const SizedBox(height: 20),
-
-            // Stats Section
-            _buildStatsSection(),
-            const SizedBox(height: 20),
-
-            // Contact Information Section
-            _buildContactSection(user),
-            const SizedBox(height: 20),
-
-            // Menu Items
-            _buildMenuItems(context),
-            const SizedBox(height: 20),
-
-            // Logout Button
-            _buildLogoutButton(context),
-            const SizedBox(height: 30),
-          ],
+      body: RefreshIndicator(
+        onRefresh: _fetchStats,
+        color: ProfilePage.primaryOrange,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              _buildAccountSection(user),
+              const SizedBox(height: 20),
+              _buildStatsSection(),
+              const SizedBox(height: 20),
+              _buildContactSection(user),
+              const SizedBox(height: 20),
+              _buildMenuItems(context),
+              const SizedBox(height: 20),
+              _buildLogoutButton(context),
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );
@@ -115,17 +121,16 @@ class _ProfilePageState extends State<ProfilePage> {
       color: Colors.white,
       child: Row(
         children: [
-          // Avatar
           Container(
             width: 70,
             height: 70,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: ProfilePage.primaryOrange,
               shape: BoxShape.circle,
             ),
             child: Center(
               child: Text(
-                user.fullName[0].toUpperCase(),
+                user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -135,8 +140,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ),
           const SizedBox(width: 16),
-
-          // User Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,11 +154,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Customer Account',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
+                  user.role == UserRole.vendor
+                      ? 'Vendor Account'
+                      : 'Customer Account',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
               ],
             ),
@@ -174,9 +176,9 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -185,16 +187,12 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           _buildStatItem(
             label: 'Orders',
-            value: _totalOrders.toString(),
+            value: _isLoadingStats ? '...' : _totalOrders.toString(),
           ),
-          Container(
-            width: 1,
-            height: 50,
-            color: Colors.grey.shade200,
-          ),
+          Container(width: 1, height: 40, color: Colors.grey.shade200),
           _buildStatItem(
             label: 'Total Spent',
-            value: '₱$_totalSpent',
+            value: _isLoadingStats ? '...' : '₱$_totalSpent',
             valueColor: ProfilePage.primaryOrange,
           ),
         ],
@@ -212,18 +210,15 @@ class _ProfilePageState extends State<ProfilePage> {
         Text(
           value,
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: valueColor,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
         ),
       ],
     );
@@ -232,10 +227,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildContactSection(AuthUser user) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,24 +238,24 @@ class _ProfilePageState extends State<ProfilePage> {
           const Text(
             'Contact Information',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1F3557),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           _buildContactItem(
             icon: Icons.email_outlined,
             label: 'Email',
             value: user.email,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildContactItem(
             icon: Icons.phone_outlined,
             label: 'Phone',
             value: user.phone,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           _buildContactItem(
             icon: Icons.location_on_outlined,
             label: 'Address',
@@ -278,8 +273,15 @@ class _ProfilePageState extends State<ProfilePage> {
   }) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: ProfilePage.primaryOrange),
-        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: ProfilePage.primaryOrange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: ProfilePage.primaryOrange),
+        ),
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,16 +290,16 @@ class _ProfilePageState extends State<ProfilePage> {
                 label,
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade500,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                   color: Color(0xFF1F3557),
                 ),
                 maxLines: 2,
@@ -321,43 +323,24 @@ class _ProfilePageState extends State<ProfilePage> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const EditProfilePage()),
-            ).then((_) {
-              // Refresh the profile page when returning
-              setState(() {
-                _calculateStats();
-              });
-            });
+            ).then((_) => _fetchStats());
           },
         ),
         _buildMenuItem(
           icon: Icons.location_on_outlined,
           title: 'My Addresses',
           subtitle: 'Manage delivery addresses',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('My Addresses coming soon!')),
-            );
-          },
-        ),
-        _buildMenuItem(
-          icon: Icons.notifications_outlined,
-          title: 'Notifications',
-          subtitle: 'Manage notification preferences',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Notifications coming soon!')),
-            );
-          },
+          onTap: () => ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Working on it!'))),
         ),
         _buildMenuItem(
           icon: Icons.settings_outlined,
           title: 'Settings',
           subtitle: 'App preferences and settings',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Settings coming soon!')),
-            );
-          },
+          onTap: () => ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Working on it!'))),
         ),
       ],
     );
@@ -370,33 +353,21 @@ class _ProfilePageState extends State<ProfilePage> {
     required VoidCallback onTap,
   }) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Container(
-                  width: 45,
-                  height: 45,
-                  decoration: BoxDecoration(
-                    color: ProfilePage.primaryOrange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: ProfilePage.primaryOrange,
-                    size: 22,
-                  ),
-                ),
+                Icon(icon, color: ProfilePage.primaryOrange, size: 24),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -410,12 +381,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           color: Color(0xFF1F3557),
                         ),
                       ),
-                      const SizedBox(height: 4),
                       Text(
                         subtitle,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade600,
+                          color: Colors.grey.shade500,
                         ),
                       ),
                     ],
@@ -423,7 +393,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 Icon(
                   Icons.arrow_forward_ios,
-                  size: 16,
+                  size: 14,
                   color: Colors.grey.shade400,
                 ),
               ],
@@ -440,21 +410,21 @@ class _ProfilePageState extends State<ProfilePage> {
       width: double.infinity,
       height: 55,
       child: ElevatedButton(
-        onPressed: () {
-          _showLogoutDialog(context);
-        },
+        onPressed: () => _showLogoutDialog(context),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red.shade500,
+          backgroundColor: Colors.white,
+          side: BorderSide(color: Colors.red.shade100),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
+          elevation: 0,
         ),
-        child: const Text(
-          'Logout',
+        child: Text(
+          'Log Out',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: Colors.red.shade600,
           ),
         ),
       ),
@@ -465,8 +435,11 @@ class _ProfilePageState extends State<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Log Out'),
+        content: const Text(
+          'Are you sure you want to log out of your account?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -475,12 +448,13 @@ class _ProfilePageState extends State<ProfilePage> {
           TextButton(
             onPressed: () {
               context.read<AuthProvider>().logout();
-              Navigator.pushReplacement(
+              Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginPage()),
+                (route) => false,
               );
             },
-            child: const Text('Logout', style: TextStyle(color: Colors.red)),
+            child: const Text('Log Out', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

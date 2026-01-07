@@ -1,22 +1,31 @@
+// lib/screens/add_package_page.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
+import '../providers/auth_provider.dart';
+import '../providers/vendor_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddPackagePage extends StatefulWidget {
+  final String? packageId;
+  final String? initialTitle;
+  final String? initialCategory;
+  final String? initialPrice;
+  final String? initialStock;
+  final String? initialDesc;
+
   const AddPackagePage({
     super.key,
+    this.packageId,
     this.initialTitle,
     this.initialCategory,
     this.initialPrice,
     this.initialStock,
     this.initialDesc,
   });
-
-  final String? initialTitle;
-  final String? initialCategory;
-  final String? initialPrice;
-  final String? initialStock;
-  final String? initialDesc;
 
   @override
   State<AddPackagePage> createState() => _AddPackagePageState();
@@ -26,126 +35,184 @@ class _AddPackagePageState extends State<AddPackagePage> {
   final _formKey = GlobalKey<FormState>();
 
   // Form Controllers
-  late final _titleController = TextEditingController(text: widget.initialTitle);
-  late final _priceController = TextEditingController(text: widget.initialPrice);
-  late final _stockController = TextEditingController(text: widget.initialStock);
+  late final _titleController = TextEditingController(
+    text: widget.initialTitle,
+  );
+  late final _priceController = TextEditingController(
+    text: widget.initialPrice,
+  );
+  late final _stockController = TextEditingController(
+    text: widget.initialStock,
+  );
   late final _descController = TextEditingController(text: widget.initialDesc);
   late String _selectedCategory = widget.initialCategory ?? 'Breakfast';
 
   // Image picker
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
+  bool _isSaving = false;
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
   @override
   Widget build(BuildContext context) {
+    // Treat as editing only if we have a non-empty packageId that isn't a fallback
+    final bool isEditing =
+        widget.packageId != null &&
+        widget.packageId!.isNotEmpty &&
+        !widget.packageId!.startsWith('fallback_');
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Add New Package", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          isEditing ? "Edit Package" : "Add New Package",
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
-          TextButton(
-            onPressed: _saveForm,
-            child: const Text("Save", style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
+          if (!_isSaving)
+            TextButton(
+              onPressed: _saveForm,
+              child: const Text(
+                "Save",
+                style: TextStyle(
+                  color: primaryOrange,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Image Placeholder
-              _buildImagePicker(),
-              const SizedBox(height: 25),
-
-              // 2. Title Field
-              _buildLabel("Package Name"),
-              TextFormField(
-                controller: _titleController,
-                decoration: _inputDecoration("e.g. Ultimate Breakfast Package"),
-                validator: (value) => value!.isEmpty ? "Please enter a name" : null,
-              ),
-              const SizedBox(height: 20),
-
-              // 3. Category Dropdown
-              _buildLabel("Category"),
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                decoration: _inputDecoration(""),
-                items: ['Breakfast', 'Lunch', 'Dinner', 'Merienda', 'Dessert']
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedCategory = val!),
-              ),
-              const SizedBox(height: 20),
-
-              // 4. Price and Stock Row
-              Row(
+      body: Stack(
+        children: [
+          Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLabel("Price (₱)"),
-                        TextFormField(
-                          controller: _priceController,
-                          keyboardType: TextInputType.number,
-                          decoration: _inputDecoration("0.00"),
-                          validator: (value) => value!.isEmpty ? "Required" : null,
-                        ),
-                      ],
+                  // 1. Image Placeholder
+                  _buildImagePicker(),
+                  const SizedBox(height: 25),
+
+                  // 2. Title Field
+                  _buildLabel("Package Name"),
+                  TextFormField(
+                    controller: _titleController,
+                    decoration: _inputDecoration(
+                      "e.g. Ultimate Breakfast Package",
                     ),
+                    validator: (value) =>
+                        value!.isEmpty ? "Please enter a name" : null,
                   ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLabel("Initial Stock"),
-                        TextFormField(
-                          controller: _stockController,
-                          keyboardType: TextInputType.number,
-                          decoration: _inputDecoration("Qty"),
-                          validator: (value) => value!.isEmpty ? "Required" : null,
+                  const SizedBox(height: 20),
+
+                  // 3. Category Dropdown
+                  _buildLabel("Category"),
+                  DropdownButtonFormField<String>(
+                    value: _selectedCategory,
+                    decoration: _inputDecoration(""),
+                    items:
+                        ['Breakfast', 'Lunch', 'Dinner', 'Merienda', 'Dessert']
+                            .map(
+                              (cat) => DropdownMenuItem(
+                                value: cat,
+                                child: Text(cat),
+                              ),
+                            )
+                            .toList(),
+                    onChanged: (val) =>
+                        setState(() => _selectedCategory = val!),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 4. Price and Stock Row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel("Price (₱)"),
+                            TextFormField(
+                              controller: _priceController,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration("0.00"),
+                              validator: (value) =>
+                                  value!.isEmpty ? "Required" : null,
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildLabel("Stock"),
+                            TextFormField(
+                              controller: _stockController,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration("Qty"),
+                              validator: (value) =>
+                                  value!.isEmpty ? "Required" : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 5. Description
+                  _buildLabel("Description"),
+                  TextFormField(
+                    controller: _descController,
+                    maxLines: 3,
+                    decoration: _inputDecoration("What's inside the package?"),
+                  ),
+                  const SizedBox(height: 30),
+
+                  // 6. Submit Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _saveForm,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryOrange,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _isSaving
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : Text(
+                              isEditing ? "Update Package" : "Publish Package",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-
-              // 5. Description
-              _buildLabel("Description"),
-              TextFormField(
-                controller: _descController,
-                maxLines: 3,
-                decoration: _inputDecoration("What's inside the package?"),
-              ),
-              const SizedBox(height: 30),
-
-              // 6. Submit Button
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _saveForm,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryOrange,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text("Publish Package", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          if (_isSaving)
+            Container(
+              color: Colors.black26,
+              child: const Center(
+                child: CircularProgressIndicator(color: primaryOrange),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -161,24 +228,41 @@ class _AddPackagePageState extends State<AddPackagePage> {
         decoration: BoxDecoration(
           color: Colors.grey.shade100,
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+          border: Border.all(
+            color: Colors.grey.shade300,
+            style: BorderStyle.solid,
+          ),
         ),
         child: _selectedImage != null
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(15),
-                child: Image.file(
-                  File(_selectedImage!.path),
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                ),
+                child: kIsWeb
+                    ? Image.network(
+                        _selectedImage!.path,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      )
+                    : Image.file(
+                        File(_selectedImage!.path),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
               )
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.add_a_photo_outlined, size: 40, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.add_a_photo_outlined,
+                    size: 40,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(height: 10),
-                  Text("Upload Package Photo", style: TextStyle(color: Colors.grey.shade600)),
+                  Text(
+                    "Upload Package Photo",
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
                 ],
               ),
       ),
@@ -188,7 +272,13 @@ class _AddPackagePageState extends State<AddPackagePage> {
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+      ),
     );
   }
 
@@ -198,9 +288,18 @@ class _AddPackagePageState extends State<AddPackagePage> {
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: primaryOrange)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: primaryOrange),
+      ),
     );
   }
 
@@ -213,13 +312,71 @@ class _AddPackagePageState extends State<AddPackagePage> {
     }
   }
 
-  void _saveForm() {
+  Future<void> _saveForm() async {
     if (_formKey.currentState!.validate()) {
-      // In a real app, you'd send this to a database
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Package Saved Successfully!")),
-      );
-      Navigator.pop(context);
+      setState(() => _isSaving = true);
+
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
+        final vendorName =
+            authProvider.currentUser?.fullName ?? "Nanay's Kitchen";
+
+        final Map<String, dynamic> data = {
+          'title': _titleController.text,
+          'type': _selectedCategory,
+          'price': int.parse(_priceController.text),
+          'left': int.parse(_stockController.text),
+          'desc': _descController.text,
+          'vendorId': vendorId,
+          'vendor': vendorName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        final bool isEditing =
+            widget.packageId != null &&
+            widget.packageId!.isNotEmpty &&
+            !widget.packageId!.startsWith('fallback_');
+
+        if (!isEditing) {
+          // Add new
+          // In a real app, you would upload the image to Firebase Storage first
+          data['imageUrl'] = 'assets/images/food_package_1.jpg';
+          data['createdAt'] = FieldValue.serverTimestamp();
+          await FirebaseFirestore.instance.collection('meals').add(data);
+        } else if (isEditing) {
+          // Update existing
+          await FirebaseFirestore.instance
+              .collection('meals')
+              .doc(widget.packageId)
+              .update(data);
+        }
+
+        if (mounted) {
+          // Refresh the vendor data
+          Provider.of<VendorProvider>(
+            context,
+            listen: false,
+          ).refreshVendorData(vendorId);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                !isEditing ? "Package Published!" : "Package Updated!",
+              ),
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("Error: $e")));
+        }
+      } finally {
+        if (mounted) setState(() => _isSaving = false);
+      }
     }
   }
 }

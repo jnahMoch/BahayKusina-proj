@@ -8,6 +8,7 @@ import '../utils/validation_utils.dart';
 import '../utils/error_handler.dart';
 import '../providers/auth_provider.dart';
 import '../models/auth_user.dart';
+import '../utils/logger.dart';
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
 import 'home_page.dart';
@@ -27,7 +28,7 @@ class _LoginPageState extends State<LoginPage> {
 
   late TextEditingController _emailController;
   late TextEditingController _passwordController;
-  
+
   String? _emailError;
   String? _passwordError;
 
@@ -49,39 +50,63 @@ class _LoginPageState extends State<LoginPage> {
   void _validateInputs() {
     setState(() {
       _emailError = ValidationUtils.validateEmail(_emailController.text);
-      _passwordError = ValidationUtils.validatePassword(_passwordController.text);
+      _passwordError = ValidationUtils.validatePassword(
+        _passwordController.text,
+      );
     });
   }
 
   void _handleLogin(BuildContext context) async {
     _validateInputs();
 
-    // If validation fails, stop
     if (_emailError != null || _passwordError != null) {
       return;
     }
 
     final authProvider = context.read<AuthProvider>();
-    
+
+    AppLogger.info(
+      'Attempting login for: ${_emailController.text} (Expected role: ${_selectedUserType == 1 ? "Vendor" : "Customer"})',
+    );
+
     final success = await authProvider.login(
       ValidationUtils.sanitizeEmail(_emailController.text),
       _passwordController.text,
+      expectedRole: _selectedUserType == 1 ? "Vendor" : "Customer",
     );
 
     if (success && mounted) {
-      if (authProvider.currentUser?.role == UserRole.vendor) {
+      final user = authProvider.currentUser;
+      AppLogger.info('Login success. Detected role: ${user?.role}');
+
+      if (user?.role == UserRole.vendor) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const VendorHomePage()),
         );
       } else {
+        // If they selected Vendor but account is Customer
+        if (_selectedUserType == 1) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Note: This account is registered as a Customer. Redirecting to Customer home.',
+              ),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomePage()),
         );
       }
-    } else if (mounted && authProvider.errorMessage != null) {
-      ErrorHandler.showErrorSnackBar(context, authProvider.errorMessage!);
+    } else if (mounted) {
+      final error =
+          authProvider.errorMessage ??
+          'Login failed. Please check your credentials.';
+      AppLogger.error('Login failed in UI: $error');
+      ErrorHandler.showErrorSnackBar(context, error);
     }
   }
 
@@ -94,7 +119,10 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             _buildHeader(),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 30),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 25.0,
+                vertical: 30,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -121,7 +149,9 @@ class _LoginPageState extends State<LoginPage> {
                     isPassword: true,
                     obscureText: !_isPasswordVisible,
                     errorText: _passwordError,
-                    onToggleVisibility: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                    onToggleVisibility: () => setState(
+                      () => _isPasswordVisible = !_isPasswordVisible,
+                    ),
                     onChanged: (_) {
                       setState(() => _passwordError = null);
                     },
@@ -141,7 +171,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildLabel(String text) {
-    return Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14));
+    return Text(
+      text,
+      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+    );
   }
 
   Widget _buildHeader() {
@@ -167,7 +200,10 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Icon(Icons.arrow_back, color: Colors.white, size: 20),
                     SizedBox(width: 5),
-                    Text("Back", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    Text(
+                      "Back",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
                   ],
                 ),
               ),
@@ -175,14 +211,29 @@ class _LoginPageState extends State<LoginPage> {
               Row(
                 children: [
                   ClipOval(
-                    child: Image.asset('assets/images/bahay_kusina_logo.png', width: 60, height: 60, fit: BoxFit.contain),
+                    child: Image.asset(
+                      'assets/images/bahay_kusina_logo.png',
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   const SizedBox(width: 15),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Welcome Back", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                      Text("Log in to continue", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      Text(
+                        "Welcome Back",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        "Log in to continue",
+                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                      ),
                     ],
                   ),
                 ],
@@ -214,13 +265,28 @@ class _LoginPageState extends State<LoginPage> {
           decoration: BoxDecoration(
             color: isSelected ? AppColors.selectorBackground : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: isSelected ? AppColors.primaryOrange : const Color.fromARGB(255, 243, 241, 241), width: 1.5),
+            border: Border.all(
+              color: isSelected
+                  ? AppColors.primaryOrange
+                  : const Color.fromARGB(255, 243, 241, 241),
+              width: 1.5,
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (isSelected) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.circle, size: 8, color: Colors.black)),
-              Text(label, style: TextStyle(color: Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+              if (isSelected)
+                const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: Icon(Icons.circle, size: 8, color: Colors.black),
+                ),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
             ],
           ),
         ),
@@ -240,7 +306,10 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ),
-        child: const Text("Forgot Password?", style: TextStyle(color: AppColors.primaryOrange, fontSize: 13)),
+        child: const Text(
+          "Forgot Password?",
+          style: TextStyle(color: AppColors.primaryOrange, fontSize: 13),
+        ),
       ),
     );
   }
@@ -252,20 +321,34 @@ class _LoginPageState extends State<LoginPage> {
           width: double.infinity,
           height: 55,
           child: ElevatedButton(
-            onPressed: authProvider.isLoading ? null : () => _handleLogin(context),
+            onPressed: authProvider.isLoading
+                ? null
+                : () => _handleLogin(context),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrangeLight,
               disabledBackgroundColor: Colors.grey.shade400,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: authProvider.isLoading
                 ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
                   )
-                : const Text("Log In", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                : const Text(
+                    "Log In",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
           ),
         );
       },
@@ -276,10 +359,22 @@ class _LoginPageState extends State<LoginPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text("Don't have an account? ", style: TextStyle(color: Colors.black54)),
+        const Text(
+          "Don't have an account? ",
+          style: TextStyle(color: Colors.black54),
+        ),
         GestureDetector(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignUpPage())),
-          child: const Text("Sign Up", style: TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.bold)),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SignUpPage()),
+          ),
+          child: const Text(
+            "Sign Up",
+            style: TextStyle(
+              color: AppColors.primaryOrange,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ],
     );

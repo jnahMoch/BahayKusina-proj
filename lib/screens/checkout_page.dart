@@ -1,17 +1,17 @@
 // lib/screens/checkout_page.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/orders_provider.dart';
+import '../providers/auth_provider.dart';
 import '../models/order.dart';
 import 'order_confirmation_page.dart';
+import '../services/firestore_service.dart';
 
 class CheckoutPage extends StatefulWidget {
   final CartProvider cartProvider;
 
-  const CheckoutPage({
-    super.key,
-    required this.cartProvider,
-  });
+  const CheckoutPage({super.key, required this.cartProvider});
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
@@ -28,16 +28,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   String _selectedPaymentMethod = 'Cash on Delivery';
 
-  final List<String> _paymentMethods = [
-    'Cash on Delivery',
-    'GCash',
-    'PayMaya',
-  ];
+  final List<String> _paymentMethods = ['Cash on Delivery', 'GCash', 'PayMaya'];
 
   @override
   void initState() {
     super.initState();
-    _addressController = TextEditingController(text: '123 Mabini St., Barangay San Juan, Manila');
+    _addressController = TextEditingController(
+      text: '123 Mabini St., Barangay San Juan, Manila',
+    );
     _contactController = TextEditingController(text: '+63 917 123 4567');
     _instructionsController = TextEditingController();
   }
@@ -59,16 +57,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     // Generate order ID
-    final orderId = '#ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 6)}';
+    final orderId =
+        '#ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 6)}';
 
     // Create order items from cart
     final orderItems = widget.cartProvider.items
-        .map((cartItem) => OrderItem(
-              mealTitle: cartItem.meal.title,
-              quantity: cartItem.quantity,
-              pricePerUnit: cartItem.meal.price,
-            ))
+        .map(
+          (cartItem) => OrderItem(
+            mealTitle: cartItem.meal.title,
+            quantity: cartItem.quantity,
+            pricePerUnit: cartItem.meal.price,
+          ),
+        )
         .toList();
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+
+    // Get vendor info from the first item in the cart
+    final firstItem = widget.cartProvider.items[0].meal;
 
     // Create order
     final order = Order(
@@ -77,12 +84,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
       items: orderItems,
       totalAmount: widget.cartProvider.totalPrice + 50,
       status: OrderStatus.pending,
+      vendorId: firstItem.vendorId,
+      vendorName: firstItem.vendor,
+      customerName: user?.fullName ?? 'Guest Customer',
       deliveryAddress: _addressController.text,
       contactNumber: _contactController.text,
       paymentMethod: _selectedPaymentMethod,
       riderName: null,
       riderEta: null,
     );
+
+    // Save to Firestore
+    if (user != null) {
+      FirestoreService().createOrder(user.userId, order);
+    }
 
     // Add order to OrdersProvider
     OrdersProvider().addOrder(order);
@@ -198,12 +213,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
           title == 'Delivery Address'
               ? Icons.location_on
               : title == 'Payment Method'
-                  ? Icons.payment
-                  : title == 'Contact Number'
-                      ? Icons.phone
-                      : title == 'Order Summary'
-                          ? Icons.receipt
-                          : Icons.edit,
+              ? Icons.payment
+              : title == 'Contact Number'
+              ? Icons.phone
+              : title == 'Order Summary'
+              ? Icons.receipt
+              : Icons.edit,
           color: primaryOrange,
           size: 20,
         ),
@@ -246,7 +261,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   width: isSelected ? 2 : 1,
                 ),
                 borderRadius: BorderRadius.circular(12),
-                color: isSelected ? primaryOrange.withOpacity(0.05) : Colors.white,
+                color: isSelected
+                    ? primaryOrange.withOpacity(0.05)
+                    : Colors.white,
               ),
               child: Row(
                 children: [
@@ -301,7 +318,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -316,7 +336,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -334,7 +357,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -402,10 +428,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 'Subtotal',
                 style: TextStyle(fontSize: 14, color: Colors.grey),
               ),
-              Text(
-                '₱$subtotal',
-                style: const TextStyle(fontSize: 14),
-              ),
+              Text('₱$subtotal', style: const TextStyle(fontSize: 14)),
             ],
           ),
           const SizedBox(height: 10),
@@ -416,10 +439,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 'Delivery Fee',
                 style: TextStyle(fontSize: 14, color: Colors.grey),
               ),
-              Text(
-                '₱$deliveryFee',
-                style: const TextStyle(fontSize: 14),
-              ),
+              Text('₱$deliveryFee', style: const TextStyle(fontSize: 14)),
             ],
           ),
           Divider(height: 20, color: Colors.grey.shade300),

@@ -1,7 +1,12 @@
 // lib/screens/manage_packages_view.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_package_page.dart';
+import '../providers/vendor_provider.dart';
+import '../providers/auth_provider.dart';
+import '../models/meal_package.dart';
 
 class ManagePackagesView extends StatelessWidget {
   const ManagePackagesView({super.key});
@@ -28,7 +33,6 @@ class ManagePackagesView extends StatelessWidget {
                   ),
                 ],
               ),
-              // Inside ManagePackagesView
               ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -54,44 +58,69 @@ class ManagePackagesView extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            children: const [
-              _VendorPackageCard(
-                title: "Ultimate Breakfast Package",
-                category: "Breakfast",
-                price: 150,
-                stock: 20,
-                items: 4,
-                imageUrl: 'assets/images/breakfast.jpg',
-                isAvailable: true,
-              ),
-              // Add more cards here...
-            ],
+          child: Consumer<VendorProvider>(
+            builder: (context, provider, child) {
+              if (provider.meals.isEmpty) {
+                return _buildEmptyState();
+              }
+
+              return RefreshIndicator(
+                onRefresh: () async {
+                  final authProvider = Provider.of<AuthProvider>(
+                    context,
+                    listen: false,
+                  );
+                  final vendorId =
+                      authProvider.currentUser?.userId ?? 'vendor_nanay';
+                  provider.refreshVendorData(vendorId);
+                },
+                color: const Color(0xFFFF6B00),
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: provider.meals.length,
+                  itemBuilder: (context, index) {
+                    final meal = provider.meals[index];
+                    return _VendorPackageCard(meal: meal);
+                  },
+                ),
+              );
+            },
           ),
         ),
       ],
     );
   }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.inventory_2_outlined,
+            size: 80,
+            color: Colors.grey.shade300,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "No packages yet",
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 16),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _VendorPackageCard extends StatelessWidget {
-  final String title, category, imageUrl;
-  final int price, stock, items;
-  final bool isAvailable;
+  final MealPackage meal;
 
-  const _VendorPackageCard({
-    required this.title,
-    required this.category,
-    required this.price,
-    required this.stock,
-    required this.items,
-    required this.imageUrl,
-    required this.isAvailable,
-  });
+  const _VendorPackageCard({required this.meal});
 
   @override
   Widget build(BuildContext context) {
+    final bool isAvailable = meal.left > 0;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
       shape: RoundedRectangleBorder(
@@ -106,12 +135,7 @@ class _VendorPackageCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              Image.asset(
-                imageUrl,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+              _buildImage(),
               if (isAvailable)
                 Positioned(
                   top: 10,
@@ -143,7 +167,7 @@ class _VendorPackageCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  meal.title,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -151,23 +175,37 @@ class _VendorPackageCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(5),
                   ),
-                  child: Text(category, style: const TextStyle(fontSize: 12)),
+                  child: Text(meal.type, style: const TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(height: 15),
-                _rowInfo("Price:", "₱$price", isPrice: true),
-                _rowInfo("Stock:", "$stock available"),
-                _rowInfo("Items:", "$items items"),
+                _rowInfo("Price:", "₱${meal.price}", isPrice: true),
+                _rowInfo("Stock:", "${meal.left} available"),
                 const SizedBox(height: 15),
                 Row(
                   children: [
-                    Expanded(child: _actionBtn(Icons.edit_outlined, "Edit", onPressed: () => _editPackage(context))),
+                    Expanded(
+                      child: _actionBtn(
+                        Icons.edit_outlined,
+                        "Edit",
+                        onPressed: () => _editPackage(context),
+                      ),
+                    ),
                     const SizedBox(width: 8),
-                    Expanded(child: _actionBtn(Icons.copy_outlined, "Duplicate", onPressed: () => _duplicatePackage(context))),
+                    Expanded(
+                      child: _actionBtn(
+                        Icons.copy_outlined,
+                        "Duplicate",
+                        onPressed: () => _duplicatePackage(context),
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _actionBtn(
@@ -185,6 +223,35 @@ class _VendorPackageCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildImage() {
+    if (meal.imageUrl.startsWith('assets/')) {
+      return Image.asset(
+        meal.imageUrl,
+        height: 160,
+        width: double.infinity,
+        fit: BoxFit.cover,
+      );
+    } else if (meal.imageUrl.isNotEmpty) {
+      return Image.network(
+        meal.imageUrl,
+        height: 160,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          height: 160,
+          color: Colors.grey.shade200,
+          child: const Icon(Icons.broken_image, color: Colors.grey),
+        ),
+      );
+    } else {
+      return Container(
+        height: 160,
+        color: Colors.grey.shade200,
+        child: const Icon(Icons.image, color: Colors.grey),
+      );
+    }
   }
 
   Widget _rowInfo(String label, String value, {bool isPrice = false}) {
@@ -206,7 +273,12 @@ class _VendorPackageCard extends StatelessWidget {
     );
   }
 
-  Widget _actionBtn(IconData icon, String label, {bool isDelete = false, VoidCallback? onPressed}) {
+  Widget _actionBtn(
+    IconData icon,
+    String label, {
+    bool isDelete = false,
+    VoidCallback? onPressed,
+  }) {
     return OutlinedButton.icon(
       onPressed: onPressed ?? () {},
       icon: Icon(icon, size: 16, color: isDelete ? Colors.red : Colors.black87),
@@ -216,28 +288,37 @@ class _VendorPackageCard extends StatelessWidget {
       ),
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: Colors.grey.shade300),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
       ),
     );
   }
 
   void _editPackage(BuildContext context) {
-    // Navigate to edit page (for now, just show a snackbar)
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Edit $title")),
-    );
-  }
-
-  void _duplicatePackage(BuildContext context) {
-    // Navigate to add page with pre-filled data
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AddPackagePage(
-          initialTitle: "$title (Copy)",
-          initialCategory: category,
-          initialPrice: price.toString(),
-          initialStock: stock.toString(),
-          initialDesc: "Copy of $title",
+          packageId: meal.id,
+          initialTitle: meal.title,
+          initialCategory: meal.type,
+          initialPrice: meal.price.toString(),
+          initialStock: meal.left.toString(),
+          initialDesc: meal.desc,
+        ),
+      ),
+    );
+  }
+
+  void _duplicatePackage(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPackagePage(
+          initialTitle: "${meal.title} (Copy)",
+          initialCategory: meal.type,
+          initialPrice: meal.price.toString(),
+          initialStock: meal.left.toString(),
+          initialDesc: meal.desc,
         ),
       ),
     );
@@ -248,19 +329,43 @@ class _VendorPackageCard extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete Package"),
-        content: Text("Are you sure you want to delete '$title'?"),
+        content: Text("Are you sure you want to delete '${meal.title}'?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text("Cancel"),
           ),
           TextButton(
-            onPressed: () {
-              // Delete logic here
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("$title deleted")),
-              );
+              try {
+                if (meal.id.isNotEmpty && !meal.id.startsWith('fallback_')) {
+                  await FirebaseFirestore.instance
+                      .collection('meals')
+                      .doc(meal.id)
+                      .delete();
+                }
+
+                final authProvider = Provider.of<AuthProvider>(
+                  context,
+                  listen: false,
+                );
+                final vendorId =
+                    authProvider.currentUser?.userId ?? 'vendor_nanay';
+
+                Provider.of<VendorProvider>(
+                  context,
+                  listen: false,
+                ).refreshVendorData(vendorId);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("${meal.title} deleted")),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text("Error deleting: $e")));
+              }
             },
             child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),

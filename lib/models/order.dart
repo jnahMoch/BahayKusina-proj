@@ -1,12 +1,7 @@
 // lib/models/order.dart
 import 'package:flutter/material.dart';
 
-enum OrderStatus {
-  outForDelivery,
-  delivered,
-  pending,
-  cancelled
-}
+enum OrderStatus { outForDelivery, delivered, pending, cancelled }
 
 class OrderItem {
   final String mealTitle;
@@ -28,6 +23,9 @@ class Order {
   final List<OrderItem> items;
   final int totalAmount;
   final OrderStatus status;
+  final String vendorId;
+  final String vendorName;
+  final String customerName;
   final String? riderName;
   final String? riderEta;
   final String deliveryAddress;
@@ -40,6 +38,9 @@ class Order {
     required this.items,
     required this.totalAmount,
     required this.status,
+    required this.vendorId,
+    required this.vendorName,
+    required this.customerName,
     required this.deliveryAddress,
     required this.contactNumber,
     required this.paymentMethod,

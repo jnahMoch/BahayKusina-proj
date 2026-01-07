@@ -12,18 +12,49 @@ class FirestoreService {
     try {
       final snapshot = await _db.collection('meals').get();
       return snapshot.docs
-          .map((doc) => MealPackage(
-                type: doc['type'] ?? 'General',
-                title: doc['title'] ?? '',
-                vendor: doc['vendor'] ?? '',
-                desc: doc['desc'] ?? '',
-                price: (doc['price'] ?? 0).toInt(),
-                left: (doc['left'] ?? 0).toInt(),
-                imageUrl: doc['imageUrl'] ?? '',
-              ))
+          .map(
+            (doc) => MealPackage(
+              id: doc.id,
+              type: doc['type'] ?? 'General',
+              title: doc['title'] ?? '',
+              vendor: doc['vendor'] ?? '',
+              vendorId: doc['vendorId'] ?? 'unknown_vendor',
+              desc: doc['desc'] ?? '',
+              price: (doc['price'] ?? 0).toInt(),
+              left: (doc['left'] ?? 0).toInt(),
+              imageUrl: doc['imageUrl'] ?? '',
+            ),
+          )
           .toList();
     } catch (e) {
       AppLogger.error('Error fetching meals: $e');
+      return [];
+    }
+  }
+
+  Future<List<MealPackage>> getVendorMeals(String vendorId) async {
+    try {
+      final snapshot = await _db
+          .collection('meals')
+          .where('vendorId', isEqualTo: vendorId)
+          .get();
+      return snapshot.docs
+          .map(
+            (doc) => MealPackage(
+              id: doc.id,
+              type: doc['type'] ?? 'General',
+              title: doc['title'] ?? '',
+              vendor: doc['vendor'] ?? '',
+              vendorId: doc['vendorId'] ?? 'unknown_vendor',
+              desc: doc['desc'] ?? '',
+              price: (doc['price'] ?? 0).toInt(),
+              left: (doc['left'] ?? 0).toInt(),
+              imageUrl: doc['imageUrl'] ?? '',
+            ),
+          )
+          .toList();
+    } catch (e) {
+      AppLogger.error('Error fetching vendor meals: $e');
       return [];
     }
   }
@@ -33,9 +64,11 @@ class FirestoreService {
       final doc = await _db.collection('meals').doc(mealId).get();
       if (doc.exists) {
         return MealPackage(
+          id: doc.id,
           type: doc['type'] ?? 'General',
           title: doc['title'] ?? '',
           vendor: doc['vendor'] ?? '',
+          vendorId: doc['vendorId'] ?? 'unknown_vendor',
           desc: doc['desc'] ?? '',
           price: (doc['price'] ?? 0).toInt(),
           left: (doc['left'] ?? 0).toInt(),
@@ -51,24 +84,41 @@ class FirestoreService {
   // ===== ORDERS COLLECTION =====
   Future<void> createOrder(String userId, order_models.Order orderData) async {
     try {
-      await _db.collection('users').doc(userId).collection('orders').add({
+      final orderMap = {
         'orderId': orderData.orderId,
         'orderDate': orderData.orderDate,
         'items': orderData.items
-            .map((item) => {
-                  'mealTitle': item.mealTitle,
-                  'quantity': item.quantity,
-                  'pricePerUnit': item.pricePerUnit,
-                })
+            .map(
+              (item) => {
+                'mealTitle': item.mealTitle,
+                'quantity': item.quantity,
+                'pricePerUnit': item.pricePerUnit,
+              },
+            )
             .toList(),
         'totalAmount': orderData.totalAmount,
         'status': orderData.status.toString().split('.').last,
+        'vendorId': orderData.vendorId,
+        'vendorName': orderData.vendorName,
+        'customerName': orderData.customerName,
+        'customerId': userId,
         'deliveryAddress': orderData.deliveryAddress,
         'contactNumber': orderData.contactNumber,
         'paymentMethod': orderData.paymentMethod,
         'riderName': orderData.riderName,
         'riderEta': orderData.riderEta,
-      });
+      };
+
+      // Save to user's orders subcollection
+      await _db
+          .collection('users')
+          .doc(userId)
+          .collection('orders')
+          .doc(orderData.orderId)
+          .set(orderMap);
+
+      // Save to top-level orders collection for vendor access
+      await _db.collection('orders').doc(orderData.orderId).set(orderMap);
     } catch (e) {
       AppLogger.error('Error creating order: $e');
       rethrow;
@@ -84,56 +134,90 @@ class FirestoreService {
           .orderBy('orderDate', descending: true)
           .get();
 
-      return snapshot.docs
-          .map((doc) {
-            final data = doc.data();
-            return order_models.Order(
-              orderId: data['orderId'] ?? '',
-              orderDate: (data['orderDate'] as Timestamp).toDate(),
-              items: (data['items'] as List)
-                  .map((item) => order_models.OrderItem(
-                        mealTitle: item['mealTitle'] ?? '',
-                        quantity: (item['quantity'] ?? 0).toInt(),
-                        pricePerUnit: (item['pricePerUnit'] ?? 0).toInt(),
-                      ))
-                  .toList(),
-              totalAmount: (data['totalAmount'] ?? 0).toInt(),
-              status: _parseOrderStatus(data['status'] ?? 'pending'),
-              deliveryAddress: data['deliveryAddress'] ?? '',
-              contactNumber: data['contactNumber'] ?? '',
-              paymentMethod: data['paymentMethod'] ?? '',
-              riderName: data['riderName'],
-              riderEta: data['riderEta'],
-            );
-          })
-          .toList();
+      return _snapshotToOrderList(snapshot);
     } catch (e) {
-      if (e is FirebaseException) {
-        AppLogger.error('Firebase error: ${e.message}');
-      } else {
-        AppLogger.error('Error: $e');
-      }
+      AppLogger.error('Error fetching user orders: $e');
       return [];
     }
   }
 
-  Future<void> updateOrderStatus(
-    String userId,
-    String orderId,
-    order_models.OrderStatus newStatus,
-  ) async {
+  Future<List<order_models.Order>> getVendorOrders(String vendorId) async {
     try {
       final snapshot = await _db
-          .collection('users')
-          .doc(userId)
           .collection('orders')
-          .where('orderId', isEqualTo: orderId)
+          .where('vendorId', isEqualTo: vendorId)
+          .orderBy('orderDate', descending: true)
           .get();
 
-      if (snapshot.docs.isNotEmpty) {
-        await snapshot.docs.first.reference.update({
-          'status': newStatus.toString().split('.').last,
-        });
+      return _snapshotToOrderList(snapshot);
+    } catch (e) {
+      AppLogger.error('Error fetching vendor orders: $e');
+      return [];
+    }
+  }
+
+  List<order_models.Order> _snapshotToOrderList(QuerySnapshot snapshot) {
+    return snapshot.docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      return order_models.Order(
+        orderId: data['orderId'] ?? '',
+        orderDate: (data['orderDate'] as Timestamp).toDate(),
+        items: (data['items'] as List)
+            .map(
+              (item) => order_models.OrderItem(
+                mealTitle: item['mealTitle'] ?? '',
+                quantity: (item['quantity'] ?? 0).toInt(),
+                pricePerUnit: (item['pricePerUnit'] ?? 0).toInt(),
+              ),
+            )
+            .toList(),
+        totalAmount: (data['totalAmount'] ?? 0).toInt(),
+        status: _parseOrderStatus(data['status'] ?? 'pending'),
+        vendorId: data['vendorId'] ?? '',
+        vendorName: data['vendorName'] ?? '',
+        customerName: data['customerName'] ?? 'Customer',
+        deliveryAddress: data['deliveryAddress'] ?? '',
+        contactNumber: data['contactNumber'] ?? '',
+        paymentMethod: data['paymentMethod'] ?? '',
+        riderName: data['riderName'],
+        riderEta: data['riderEta'],
+      );
+    }).toList();
+  }
+
+  Future<void> updateOrderStatus(
+    String orderId,
+    order_models.OrderStatus newStatus, {
+    String? customerId,
+  }) async {
+    try {
+      final statusStr = newStatus.toString().split('.').last;
+
+      // Update in top-level orders
+      await _db.collection('orders').doc(orderId).update({'status': statusStr});
+
+      // Update in user's subcollection if customerId is known
+      if (customerId != null) {
+        await _db
+            .collection('users')
+            .doc(customerId)
+            .collection('orders')
+            .doc(orderId)
+            .update({'status': statusStr});
+      } else {
+        // Find the order to get customerId
+        final orderDoc = await _db.collection('orders').doc(orderId).get();
+        if (orderDoc.exists) {
+          final cid = orderDoc.data()?['customerId'];
+          if (cid != null) {
+            await _db
+                .collection('users')
+                .doc(cid)
+                .collection('orders')
+                .doc(orderId)
+                .update({'status': statusStr});
+          }
+        }
       }
     } catch (e) {
       AppLogger.error('Error updating order status: $e');

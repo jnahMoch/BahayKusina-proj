@@ -5,6 +5,7 @@ import '../models/auth_user.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/signup_text_field.dart';
+import '../utils/logger.dart';
 import 'home_page.dart';
 import 'vendor_home_page.dart';
 
@@ -26,7 +27,8 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -52,11 +54,21 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+      return;
+    }
+
     setState(() => _isLoading = true);
+    AppLogger.info('Sign up initiated for: ${_emailPhoneController.text}');
 
     try {
       final authProvider = context.read<AuthProvider>();
-      final role = selectedRole == "Order Food" ? UserRole.customer : UserRole.vendor;
+      final role = selectedRole == "Order Food"
+          ? UserRole.customer
+          : UserRole.vendor;
 
       final success = await authProvider.signup(
         fullName: _nameController.text,
@@ -68,6 +80,7 @@ class _SignUpPageState extends State<SignUpPage> {
       );
 
       if (success && mounted) {
+        AppLogger.info('Signup successful. Redirecting user...');
         if (role == UserRole.vendor) {
           Navigator.pushReplacement(
             context,
@@ -80,17 +93,18 @@ class _SignUpPageState extends State<SignUpPage> {
           );
         }
       } else if (mounted) {
+        final error =
+            authProvider.errorMessage ?? 'Signup failed. Please try again.';
+        AppLogger.error('Signup failed in UI: $error');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(authProvider.errorMessage ?? 'Signup failed. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
+      AppLogger.error('Unexpected error in Signup UI: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(content: Text('An unexpected error occurred: $e')),
         );
       }
     } finally {
@@ -107,7 +121,10 @@ class _SignUpPageState extends State<SignUpPage> {
             _buildHeader(),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 25,
+                  vertical: 20,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -149,7 +166,8 @@ class _SignUpPageState extends State<SignUpPage> {
                       hint: "At least 8 characters",
                       isPassword: true,
                       obscureText: obscurePassword,
-                      onToggleVisibility: () => setState(() => obscurePassword = !obscurePassword),
+                      onToggleVisibility: () =>
+                          setState(() => obscurePassword = !obscurePassword),
                     ),
                     const SizedBox(height: 20),
                     _buildLabel("Confirm Password"),
@@ -158,7 +176,9 @@ class _SignUpPageState extends State<SignUpPage> {
                       hint: "Re-enter your password",
                       isPassword: true,
                       obscureText: obscureConfirmPassword,
-                      onToggleVisibility: () => setState(() => obscureConfirmPassword = !obscureConfirmPassword),
+                      onToggleVisibility: () => setState(
+                        () => obscureConfirmPassword = !obscureConfirmPassword,
+                      ),
                     ),
                     const SizedBox(height: 30),
                     _buildTermsAndConditions(),
@@ -198,14 +218,21 @@ class _SignUpPageState extends State<SignUpPage> {
                   children: [
                     Icon(Icons.arrow_back, color: Colors.white, size: 20),
                     SizedBox(width: 5),
-                    Text("Back", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    Text(
+                      "Back",
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 10),
               const Text(
                 "Create Account",
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -217,7 +244,11 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget _buildLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
+        color: Colors.black87,
+      ),
     );
   }
 
@@ -242,17 +273,20 @@ class _SignUpPageState extends State<SignUpPage> {
             color: isSelected ? AppColors.selectorBackground : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? AppColors.primaryOrange : const Color.fromARGB(255, 243, 241, 241),
+              color: isSelected
+                  ? AppColors.primaryOrange
+                  : const Color.fromARGB(255, 243, 241, 241),
               width: 1.5,
             ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (isSelected) const Padding(
-                padding: EdgeInsets.only(right: 8),
-                child: Icon(Icons.circle, size: 8, color: Colors.black),
-              ),
+              if (isSelected)
+                const Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: Icon(Icons.circle, size: 8, color: Colors.black),
+                ),
               Text(
                 label,
                 style: TextStyle(
@@ -275,7 +309,10 @@ class _SignUpPageState extends State<SignUpPage> {
           const TextSpan(text: "By signing up, you agree to our "),
           TextSpan(
             text: "Terms & Conditions",
-            style: const TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: AppColors.primaryOrange,
+              fontWeight: FontWeight.bold,
+            ),
             recognizer: TapGestureRecognizer()
               ..onTap = () => ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Terms & Conditions")),
@@ -284,11 +321,14 @@ class _SignUpPageState extends State<SignUpPage> {
           const TextSpan(text: " and "),
           TextSpan(
             text: "Privacy Policy",
-            style: const TextStyle(color: AppColors.primaryOrange, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: AppColors.primaryOrange,
+              fontWeight: FontWeight.bold,
+            ),
             recognizer: TapGestureRecognizer()
-              ..onTap = () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Privacy Policy")),
-              ),
+              ..onTap = () => ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text("Privacy Policy"))),
           ),
         ],
       ),
@@ -305,17 +345,26 @@ class _SignUpPageState extends State<SignUpPage> {
           backgroundColor: AppColors.primaryOrangeLight,
           disabledBackgroundColor: Colors.grey.shade400,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         child: _isLoading
             ? const SizedBox(
                 height: 20,
                 width: 20,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
               )
             : const Text(
                 "Create Account",
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
       ),
     );

@@ -47,30 +47,19 @@ class MealCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(10.0),
-              child: Image.asset(
-                meal.imageUrl,
-                width: 90,
-                height: 90,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 90,
-                    height: 90,
-                    color: Colors.grey.shade300,
-                    child: const Icon(Icons.image_not_supported, color: Colors.grey),
-                  );
-                },
-              ),
+              child: _buildImage(meal.imageUrl),
             ),
             const SizedBox(width: 15),
-            
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: _getTypeColor(meal.type),
                       borderRadius: BorderRadius.circular(5),
@@ -88,16 +77,24 @@ class MealCard extends StatelessWidget {
                   Text(
                     meal.title,
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.location_on, size: 12, color: Colors.grey.shade600),
+                      Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: Colors.grey.shade600,
+                      ),
                       Text(
                         meal.vendor,
                         style: TextStyle(
-                            fontSize: 12, color: Colors.grey.shade600),
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
                   ),
@@ -111,7 +108,7 @@ class MealCard extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -126,56 +123,66 @@ class MealCard extends StatelessWidget {
                     letterSpacing: -0.5,
                   ),
                 ),
-                
+
                 const SizedBox(height: 12),
 
                 // 2. Enhanced Order Button
                 SizedBox(
                   height: 32,
                   child: ElevatedButton(
-                    onPressed: meal.isOutOfStock ? null : () {
-                      // Navigate to order details page
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => OrderDetailsPage(
-                            meal: meal,
-                            onOrderConfirmed: (quantity) {
-                              if (cartProvider != null) {
-                                cartProvider!.addToCart(meal, quantity);
-                                onOrderAdded?.call();
-                                // Show snackbar confirmation
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '$quantity x ${meal.title} added to cart',
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
-                                    backgroundColor: const Color(0xFFFF6B00),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: meal.isOutOfStock
+                        ? null
+                        : () {
+                            // Navigate to order details page
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => OrderDetailsPage(
+                                  meal: meal,
+                                  onOrderConfirmed: (quantity) {
+                                    if (cartProvider != null) {
+                                      cartProvider!.addToCart(meal, quantity);
+                                      onOrderAdded?.call();
+                                      // Show snackbar confirmation
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '$quantity x ${meal.title} added to cart',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          backgroundColor: const Color(
+                                            0xFFFF6B00,
+                                          ),
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B00),
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey.shade300,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20), // More modern pill shape
+                        borderRadius: BorderRadius.circular(
+                          20,
+                        ), // More modern pill shape
                       ),
                       elevation: 0,
                     ),
                     child: Text(
                       meal.isOutOfStock ? "Sold Out" : "Order",
                       style: const TextStyle(
-                        fontSize: 13, 
-                        fontWeight: FontWeight.bold
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -188,9 +195,9 @@ class MealCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.inventory_2_outlined, 
-                      size: 10, 
-                      color: meal.stockColor
+                      Icons.inventory_2_outlined,
+                      size: 10,
+                      color: meal.stockColor,
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -198,7 +205,9 @@ class MealCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         color: meal.stockColor,
-                        fontWeight: meal.isLowStock ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: meal.isLowStock
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                   ],
@@ -208,6 +217,39 @@ class MealCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildImage(String? url) {
+    if (url == null || url.isEmpty) return _buildPlaceholder();
+
+    bool isNetwork = url.startsWith('http') || url.startsWith('https');
+
+    if (isNetwork) {
+      return Image.network(
+        url,
+        width: 90,
+        height: 90,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      );
+    } else {
+      return Image.asset(
+        url,
+        width: 90,
+        height: 90,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      );
+    }
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      width: 90,
+      height: 90,
+      color: Colors.grey.shade200,
+      child: const Icon(Icons.restaurant, color: Colors.grey, size: 40),
     );
   }
 }

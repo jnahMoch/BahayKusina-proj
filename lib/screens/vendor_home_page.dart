@@ -1,8 +1,11 @@
 // lib/screens/vendor_home_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'manage_packages_view.dart';
 import 'orders_view.dart';
+import '../providers/vendor_provider.dart';
+import '../providers/auth_provider.dart';
 
 class VendorHomePage extends StatefulWidget {
   const VendorHomePage({super.key});
@@ -17,123 +20,360 @@ class _VendorHomePageState extends State<VendorHomePage> {
   static const Color primaryOrange = Color(0xFFFF6B00);
   static const Color accentRed = Color(0xFFFF3D00);
 
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: const Color(0xFFF8F9FA),
-    body: Column(
-      children: [
-        _buildHeader(), // Your existing gradient header
-        Expanded(
-          child: Stack(
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshData();
+    });
+  }
+
+  void _refreshData() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final vendorProvider = Provider.of<VendorProvider>(context, listen: false);
+
+    // For demo purposes, if vendorId is null, use a default one
+    final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
+    vendorProvider.refreshVendorData(vendorId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: Consumer<VendorProvider>(
+        builder: (context, vendorProvider, child) {
+          if (vendorProvider.isLoading && vendorProvider.orders.isEmpty) {
+            return const Center(
+              child: CircularProgressIndicator(color: primaryOrange),
+            );
+          }
+
+          return Column(
             children: [
-              // SWITCHING LOGIC
-              IndexedStack(
-                index: _selectedIndex,
-                children: [
-                  _buildDashboardMetrics(), // Move your existing ListView metrics here
-                  const ManagePackagesView(),
-                  const OrdersView(),
-                ],
-              ),
-              
-              Positioned(
-                bottom: 20,
-                left: 0,
-                right: 0,
-                child: Center(child: _buildFloatingToggle()),
+              _buildHeader(context),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: IndexedStack(
+                        index: _selectedIndex,
+                        children: [
+                          RefreshIndicator(
+                            onRefresh: () async => _refreshData(),
+                            color: primaryOrange,
+                            child: _buildDashboardMetrics(vendorProvider),
+                          ),
+                          const ManagePackagesView(),
+                          const OrdersView(),
+                        ],
+                      ),
+                    ),
+
+                    Positioned(
+                      bottom: 20,
+                      left: 0,
+                      right: 0,
+                      child: Center(child: _buildFloatingToggle()),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
+          );
+        },
+      ),
+    );
+  }
 
-// Update your floating toggle to support 3 items
-Widget _buildFloatingToggle() {
-  return Container(
-    padding: const EdgeInsets.all(4),
-    decoration: BoxDecoration(
-      color: const Color(0xFFE9EEF5),
-      borderRadius: BorderRadius.circular(30),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _toggleItem("Dashboard", Icons.dashboard_outlined, 0),
-        _toggleItem("Packages", Icons.inventory_2, 1),
-        _toggleItem("Orders", Icons.shopping_bag_outlined, 2),
-      ],
-    ),
-  );
-}
-
-  Widget _buildHeader() {
+  Widget _buildFloatingToggle() {
     return Container(
-      padding: const EdgeInsets.only(top: 50, bottom: 25, left: 20, right: 20),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE9EEF5).withOpacity(0.9),
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _toggleItem("Dashboard", Icons.dashboard_outlined, 0),
+          _toggleItem("Packages", Icons.inventory_2, 1),
+          _toggleItem("Orders", Icons.shopping_bag_outlined, 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userName = authProvider.currentUser?.fullName ?? "Nanay's Kitchen";
+    final address = authProvider.currentUser?.address ?? "Manila, Philippines";
+
+    return Container(
+      padding: const EdgeInsets.only(top: 60, bottom: 30, left: 24, right: 24),
       decoration: const BoxDecoration(
+        color: primaryOrange,
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
         gradient: LinearGradient(
           colors: [accentRed, primaryOrange],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Logout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    child: const Icon(Icons.store, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        userName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        address,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white, size: 22),
+                onPressed: () async {
+                  await authProvider.logout();
+                  if (mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
+                },
               ),
             ],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: const [
-              Text("Vendor Dashboard", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              Text("Nanay's Kitchen", style: TextStyle(color: Colors.white70, fontSize: 13)),
-            ],
-          ),
-          const Icon(Icons.inventory_2, color: Colors.white, size: 22),
         ],
       ),
     );
   }
 
-  Widget _buildDashboardMetrics() {
+  Widget _buildDashboardMetrics(VendorProvider provider) {
+    // Collect low stock items
+    final lowStockItems = provider.meals
+        .where((m) => m.left > 0 && m.left <= 5)
+        .toList();
+    final recentOrders = provider.orders.take(3).toList();
+
     return ListView(
-      padding: const EdgeInsets.all(20),
-      children: const [
-        _MetricCard(
-          title: "Total Sales",
-          value: "₱12,500",
-          subtitle: "This month",
-          icon: Icons.attach_money,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
+      children: [
+        const Text(
+          "Business Overview",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        _MetricCard(
-          title: "Active Orders",
-          value: "24",
-          subtitle: "Pending delivery",
-          icon: Icons.shopping_cart,
+        const SizedBox(height: 15),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                title: "Total Sales",
+                value: "₱${provider.totalSales}",
+                subtitle: "Earnings",
+                icon: Icons.payments_outlined,
+                color: Colors.green,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _MetricCard(
+                title: "Pending",
+                value: "${provider.pendingOrders}",
+                subtitle: "Orders",
+                icon: Icons.pending_actions,
+                color: Colors.blue,
+              ),
+            ),
+          ],
         ),
-        _MetricCard(
-          title: "Packages",
-          value: "8",
-          subtitle: "Available",
-          icon: Icons.inventory,
+        Row(
+          children: [
+            Expanded(
+              child: _MetricCard(
+                title: "Packages",
+                value: "${provider.activePackages}",
+                subtitle: "Live",
+                icon: Icons.restaurant_menu,
+                color: Colors.purple,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _MetricCard(
+                title: "Total",
+                value: "${provider.totalOrders}",
+                subtitle: "Orders",
+                icon: Icons.assignment_turned_in_outlined,
+                color: primaryOrange,
+              ),
+            ),
+          ],
         ),
-        _MetricCard(
-          title: "Customers",
-          value: "156",
-          subtitle: "Served",
-          icon: Icons.people,
-        ),
+
+        if (lowStockItems.isNotEmpty) ...[
+          const SizedBox(height: 25),
+          const Text(
+            "Low Stock Alerts",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.orange,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...lowStockItems.map(
+            (meal) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orange.withOpacity(0.2)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    meal.title,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    "${meal.left} left",
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        if (recentOrders.isNotEmpty) ...[
+          const SizedBox(height: 25),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Recent Activity",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _selectedIndex = 2),
+                child: const Text("See All"),
+              ),
+            ],
+          ),
+          ...recentOrders.map(
+            (order) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 5,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: primaryOrange.withOpacity(0.1),
+                    radius: 20,
+                    child: const Icon(
+                      Icons.shopping_bag_outlined,
+                      color: primaryOrange,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.customerName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          "₱${order.totalAmount} • ${order.items.length} items",
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      order.status.toString().split('.').last,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        if (provider.error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Text(
+              "Error: ${provider.error}",
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        const SizedBox(height: 80), // Space for floating toggle
       ],
     );
   }
@@ -147,13 +387,30 @@ Widget _buildFloatingToggle() {
         decoration: BoxDecoration(
           color: isActive ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(25),
-          boxShadow: isActive ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)] : [],
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                  ),
+                ]
+              : [],
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: isActive ? Colors.black : Colors.black54),
+            Icon(
+              icon,
+              size: 18,
+              color: isActive ? Colors.black : Colors.black54,
+            ),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(fontSize: 13, fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
           ],
         ),
       ),
@@ -164,8 +421,15 @@ Widget _buildFloatingToggle() {
 class _MetricCard extends StatelessWidget {
   final String title, value, subtitle;
   final IconData icon;
+  final Color color;
 
-  const _MetricCard({required this.title, required this.value, required this.subtitle, required this.icon});
+  const _MetricCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+    this.color = const Color(0xFFFF6B00),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +439,14 @@ class _MetricCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -183,13 +454,38 @@ class _MetricCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 12),
-              Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFFF6B00))),
-              Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+              ),
             ],
           ),
-          Icon(icon, color: Colors.blueGrey.shade200, size: 24),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
         ],
       ),
     );

@@ -2,18 +2,22 @@
 import 'package:flutter/material.dart';
 
 class MealPackage {
+  final String id;
   final String type;
   final String title;
   final String vendor;
+  final String vendorId;
   final String desc;
   final int price;
   final int left;
   final String imageUrl;
 
   const MealPackage({
+    this.id = '',
     required this.type,
     required this.title,
     required this.vendor,
+    required this.vendorId,
     required this.desc,
     required this.price,
     required this.left,

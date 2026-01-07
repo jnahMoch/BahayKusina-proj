@@ -1,18 +1,14 @@
 // lib/screens/orders_page.dart
 
 import 'package:flutter/material.dart';
-import '../models/order.dart';
-import '../providers/cart_provider.dart';
-import '../providers/orders_provider.dart';
+import 'package:provider/provider.dart';
+import '../models/order.dart' as order_models;
+import '../providers/auth_provider.dart';
+import '../services/firestore_service.dart';
 import 'track_order_page.dart';
 
 class OrdersPage extends StatefulWidget {
-  final CartProvider? cartProvider;
-
-  const OrdersPage({
-    super.key,
-    this.cartProvider,
-  });
+  const OrdersPage({super.key});
 
   static const Color primaryOrange = Color(0xFFFF6B00);
   static const Color successGreen = Color(0xFF4CAF50);
@@ -22,19 +18,32 @@ class OrdersPage extends StatefulWidget {
 }
 
 class _OrdersPageState extends State<OrdersPage> {
-  late List<Order> orders;
-  late OrdersProvider _ordersProvider;
+  final FirestoreService _firestoreService = FirestoreService();
+  List<order_models.Order> _orders = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _ordersProvider = OrdersProvider();
-    _initializeOrders();
+    _fetchOrders();
   }
 
-  void _initializeOrders() {
-    // Get orders from OrdersProvider
-    orders = _ordersProvider.orders;
+  Future<void> _fetchOrders() async {
+    setState(() => _isLoading = true);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.currentUser != null) {
+      final orders = await _firestoreService.getUserOrders(
+        authProvider.currentUser!.userId,
+      );
+      if (mounted) {
+        setState(() {
+          _orders = orders;
+          _isLoading = false;
+        });
+      }
+    } else {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -45,7 +54,7 @@ class _OrdersPageState extends State<OrdersPage> {
         backgroundColor: OrdersPage.primaryOrange,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, size: 20, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -53,21 +62,38 @@ class _OrdersPageState extends State<OrdersPage> {
           children: [
             const Text(
               'My Orders',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             Text(
-              '${orders.length} orders',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              '${_orders.length} orders',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+                color: Colors.white70,
+              ),
             ),
           ],
         ),
       ),
-      body: orders.isEmpty
-          ? _buildEmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.all(15),
-              itemCount: orders.length,
-              itemBuilder: (context, index) => _buildOrderCard(orders[index]),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: OrdersPage.primaryOrange),
+            )
+          : RefreshIndicator(
+              onRefresh: _fetchOrders,
+              color: OrdersPage.primaryOrange,
+              child: _orders.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(15),
+                      itemCount: _orders.length,
+                      itemBuilder: (context, index) =>
+                          _buildOrderCard(_orders[index]),
+                    ),
             ),
     );
   }
@@ -77,8 +103,11 @@ class _OrdersPageState extends State<OrdersPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_rounded,
-              size: 80, color: Colors.grey.shade400),
+          Icon(
+            Icons.receipt_long_rounded,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
           const SizedBox(height: 20),
           const Text(
             'No orders yet',
@@ -94,7 +123,7 @@ class _OrdersPageState extends State<OrdersPage> {
     );
   }
 
-  Widget _buildOrderCard(Order order) {
+  Widget _buildOrderCard(order_models.Order order) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -103,7 +132,6 @@ class _OrdersPageState extends State<OrdersPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Order ID and Status
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -116,7 +144,10 @@ class _OrdersPageState extends State<OrdersPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: order.statusColor.withOpacity(0.15),
                     border: Border.all(color: order.statusColor, width: 1.5),
@@ -134,11 +165,13 @@ class _OrdersPageState extends State<OrdersPage> {
               ],
             ),
             const SizedBox(height: 8),
-
-            // Order Date and Time
             Row(
               children: [
-                Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
+                Icon(
+                  Icons.calendar_today,
+                  size: 14,
+                  color: Colors.grey.shade600,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   _formatDate(order.orderDate),
@@ -147,15 +180,11 @@ class _OrdersPageState extends State<OrdersPage> {
               ],
             ),
             const SizedBox(height: 12),
-
-            // Divider
             Container(
               height: 1,
               color: Colors.grey.shade200,
               margin: const EdgeInsets.symmetric(vertical: 12),
             ),
-
-            // Order Items
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: order.items.map((item) {
@@ -174,8 +203,6 @@ class _OrdersPageState extends State<OrdersPage> {
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -201,17 +228,12 @@ class _OrdersPageState extends State<OrdersPage> {
                 );
               }).toList(),
             ),
-
             const SizedBox(height: 12),
-
-            // Divider
             Container(
               height: 1,
               color: Colors.grey.shade200,
               margin: const EdgeInsets.symmetric(vertical: 12),
             ),
-
-            // Total Amount
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -222,16 +244,14 @@ class _OrdersPageState extends State<OrdersPage> {
                 Text(
                   '₱${order.totalAmount}',
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: OrdersPage.primaryOrange,
                   ),
                 ),
               ],
             ),
-
-            // Rider Info (if out for delivery)
-            if (order.status == OrderStatus.outForDelivery &&
+            if (order.status == order_models.OrderStatus.outForDelivery &&
                 order.riderName != null) ...[
               const SizedBox(height: 15),
               Container(
@@ -246,8 +266,11 @@ class _OrdersPageState extends State<OrdersPage> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.person_outline,
-                            size: 16, color: Colors.blue.shade700),
+                        Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: Colors.blue.shade700,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Rider: ${order.riderName}',
@@ -262,8 +285,11 @@ class _OrdersPageState extends State<OrdersPage> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.schedule,
-                            size: 16, color: Colors.blue.shade700),
+                        Icon(
+                          Icons.schedule,
+                          size: 16,
+                          color: Colors.blue.shade700,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'ETA: ${order.riderEta}',
@@ -279,10 +305,7 @@ class _OrdersPageState extends State<OrdersPage> {
                 ),
               ),
             ],
-
             const SizedBox(height: 15),
-
-            // Track Order Button
             SizedBox(
               width: double.infinity,
               height: 45,
@@ -292,7 +315,9 @@ class _OrdersPageState extends State<OrdersPage> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => TrackOrderPage(
-                        orderId: order.orderId.replaceAll('#', '').replaceAll('ORD-', ''),
+                        orderId: order.orderId
+                            .replaceAll('#', '')
+                            .replaceAll('ORD-', ''),
                         riderName: order.riderName ?? 'Pending Assignment',
                         eta: order.riderEta ?? 'Calculating...',
                         deliveryAddress: order.deliveryAddress,
@@ -305,15 +330,12 @@ class _OrdersPageState extends State<OrdersPage> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
+                  foregroundColor: Colors.white,
                 ),
                 icon: const Icon(Icons.location_on, size: 18),
                 label: const Text(
                   'Track Order',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -336,13 +358,14 @@ class _OrdersPageState extends State<OrdersPage> {
       'Sep',
       'Oct',
       'Nov',
-      'Dec'
+      'Dec',
     ];
     final month = months[dateTime.month - 1];
     final period = dateTime.hour >= 12 ? 'PM' : 'AM';
-    final hour = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
+    final hour = dateTime.hour % 12 == 12
+        ? 12
+        : (dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12);
     final minute = dateTime.minute.toString().padLeft(2, '0');
-
-    return '$month ${dateTime.day}, ${dateTime.year.toString().substring(2)} $hour:$minute $period';
+    return '$month ${dateTime.day}, ${dateTime.year} $hour:$minute $period';
   }
 }
