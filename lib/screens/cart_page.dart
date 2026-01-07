@@ -1,18 +1,12 @@
 // lib/screens/cart_page.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import 'checkout_page.dart';
 
 class CartPage extends StatefulWidget {
-  final CartProvider cartProvider;
-  final Function() onCheckout;
-
-  const CartPage({
-    super.key,
-    required this.cartProvider,
-    required this.onCheckout,
-  });
+  const CartPage({super.key});
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
@@ -23,7 +17,8 @@ class CartPage extends StatefulWidget {
 class _CartPageState extends State<CartPage> {
   @override
   Widget build(BuildContext context) {
-    if (widget.cartProvider.isEmpty) {
+    final cartProvider = context.watch<CartProvider>();
+    if (cartProvider.isEmpty) {
       return Scaffold(
         appBar: AppBar(
           backgroundColor: CartPage.primaryOrange,
@@ -73,21 +68,19 @@ class _CartPageState extends State<CartPage> {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(15),
-              itemCount: widget.cartProvider.items.length,
+              itemCount: cartProvider.items.length,
               itemBuilder: (context, index) {
-                final cartItem = widget.cartProvider.items[index];
+                final cartItem = cartProvider.items[index];
                 return _CartItemWidget(
                   cartItem: cartItem,
                   onQuantityChanged: (newQuantity) {
-                    widget.cartProvider.updateQuantity(
+                    cartProvider.updateQuantity(
                       cartItem.meal.title,
                       newQuantity,
                     );
-                    setState(() {});
                   },
                   onRemove: () {
-                    widget.cartProvider.removeFromCart(cartItem.meal.title);
-                    setState(() {});
+                    cartProvider.removeFromCart(cartItem.meal.title);
                   },
                 );
               },
@@ -112,7 +105,7 @@ class _CartPageState extends State<CartPage> {
                       style: TextStyle(fontSize: 14, color: Colors.grey),
                     ),
                     Text(
-                      '₱${widget.cartProvider.totalPrice}',
+                      '₱${cartProvider.totalPrice}',
                       style: const TextStyle(fontSize: 14),
                     ),
                   ],
@@ -140,7 +133,7 @@ class _CartPageState extends State<CartPage> {
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      '₱${widget.cartProvider.totalPrice + 50}',
+                      '₱${cartProvider.totalPrice + 50}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -160,7 +153,7 @@ class _CartPageState extends State<CartPage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => CheckoutPage(cartProvider: widget.cartProvider),
+                          builder: (context) => const CheckoutPage(),
                         ),
                       );
                     },

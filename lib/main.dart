@@ -7,7 +7,10 @@ import 'screens/welcome_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/orders_provider.dart';
+<<<<<<< HEAD
 import 'providers/vendor_provider.dart';
+=======
+>>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
 import 'services/notification_service.dart';
 import 'screens/home_page.dart';
 import 'screens/vendor_home_page.dart';
@@ -17,7 +20,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Initialize auth provider (checkAuthStatus is called in constructor)
   final authProvider = AuthProvider();
 
   runApp(BahayKusinaApp(authProvider: authProvider));
@@ -36,7 +38,10 @@ class BahayKusinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NotificationService()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => OrdersProvider()),
+<<<<<<< HEAD
         ChangeNotifierProvider(create: (_) => VendorProvider()),
+=======
+>>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
       ],
       child: MaterialApp(
         title: 'BahayKusina',

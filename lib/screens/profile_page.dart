@@ -7,6 +7,9 @@ import '../models/auth_user.dart';
 import '../services/firestore_service.dart';
 import 'login_page.dart';
 import 'edit_profile_page.dart';
+import 'addresses_page.dart';
+import 'notifications.dart';
+import 'settings_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -330,17 +333,46 @@ class _ProfilePageState extends State<ProfilePage> {
           icon: Icons.location_on_outlined,
           title: 'My Addresses',
           subtitle: 'Manage delivery addresses',
+<<<<<<< HEAD
           onTap: () => ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Working on it!'))),
+=======
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AddressesPage()),
+            );
+          },
+        ),
+        _buildMenuItem(
+          icon: Icons.notifications_outlined,
+          title: 'Notifications',
+          subtitle: 'Manage notification preferences',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NotificationsPage()),
+            );
+          },
+>>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
         ),
         _buildMenuItem(
           icon: Icons.settings_outlined,
           title: 'Settings',
           subtitle: 'App preferences and settings',
+<<<<<<< HEAD
           onTap: () => ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('Working on it!'))),
+=======
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsPage()),
+            );
+          },
+>>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
         ),
       ],
     );

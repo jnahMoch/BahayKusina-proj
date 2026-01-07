@@ -57,4 +57,10 @@ class NotificationService extends ChangeNotifier {
     AppLogger.info('Body: $body');
     AppLogger.info('--------------------');
   }
+
+  void clearAll() {
+    _notifications.clear();
+    AppLogger.info('All notifications cleared.');
+    notifyListeners();
+  }
 }

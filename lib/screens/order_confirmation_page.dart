@@ -1,5 +1,6 @@
 // lib/screens/order_confirmation_page.dart
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/cart_item.dart';
 import 'home_page.dart';
 import 'track_order_page.dart';
@@ -11,6 +12,7 @@ class OrderConfirmationPage extends StatelessWidget {
   final String paymentMethod;
   final String estimatedDelivery;
   final List<CartItem> cartItems;
+  final LatLng? deliveryCoordinates;
 
   const OrderConfirmationPage({
     super.key,
@@ -20,6 +22,7 @@ class OrderConfirmationPage extends StatelessWidget {
     required this.paymentMethod,
     required this.estimatedDelivery,
     required this.cartItems,
+    this.deliveryCoordinates,
   });
 
   static const Color primaryOrange = Color(0xFFFF6B00);
@@ -230,6 +233,7 @@ class OrderConfirmationPage extends StatelessWidget {
                           riderName: 'Rider Assigned Soon',
                           eta: estimatedDelivery,
                           deliveryAddress: deliveryAddress,
+                          deliveryLocation: deliveryCoordinates,
                         ),
                       ),
                     );

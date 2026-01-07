@@ -1,5 +1,6 @@
 // lib/models/order.dart
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 enum OrderStatus { outForDelivery, delivered, pending, cancelled }
 
@@ -31,6 +32,7 @@ class Order {
   final String deliveryAddress;
   final String contactNumber;
   final String paymentMethod;
+  final LatLng? deliveryCoordinates;
 
   const Order({
     required this.orderId,
@@ -46,6 +48,7 @@ class Order {
     required this.paymentMethod,
     this.riderName,
     this.riderEta,
+    this.deliveryCoordinates,
   });
 
   Color get statusColor {
