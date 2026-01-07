@@ -333,11 +333,6 @@ class _ProfilePageState extends State<ProfilePage> {
           icon: Icons.location_on_outlined,
           title: 'My Addresses',
           subtitle: 'Manage delivery addresses',
-<<<<<<< HEAD
-          onTap: () => ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Working on it!'))),
-=======
           onTap: () {
             Navigator.push(
               context,
@@ -352,27 +347,22 @@ class _ProfilePageState extends State<ProfilePage> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const NotificationsPage()),
+              MaterialPageRoute(
+                builder: (context) => const NotificationsPage(),
+              ),
             );
           },
->>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
         ),
         _buildMenuItem(
           icon: Icons.settings_outlined,
           title: 'Settings',
           subtitle: 'App preferences and settings',
-<<<<<<< HEAD
-          onTap: () => ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Working on it!'))),
-=======
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SettingsPage()),
             );
           },
->>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
         ),
       ],
     );

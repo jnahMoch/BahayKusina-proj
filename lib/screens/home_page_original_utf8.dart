@@ -76,7 +76,7 @@ class _HomePageState extends State<HomePage> {
       'Lunch',
       'Dinner',
       'Merienda',
-      'Dessert'
+      'Dessert',
     ];
 
     return DefaultTabController(
@@ -100,7 +100,10 @@ class _HomePageState extends State<HomePage> {
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [HomePage.primaryOrange, HomePage.secondaryOrange],
+                        colors: [
+                          HomePage.primaryOrange,
+                          HomePage.secondaryOrange,
+                        ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -122,7 +125,10 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0,
+                          vertical: 8.0,
+                        ),
                         child: _buildSearchBar(),
                       ),
                       TabBar(
@@ -133,17 +139,31 @@ class _HomePageState extends State<HomePage> {
                         unselectedLabelColor: Colors.white.withOpacity(0.7),
                         tabAlignment: TabAlignment.start,
                         padding: const EdgeInsets.only(left: 15, bottom: 8),
-                        tabs: categories.map((name) => Tab(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 8.0),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20.0),
-                              border: Border.all(color: Colors.white.withOpacity(0.1)),
-                            ),
-                            child: Text(name, style: const TextStyle(fontWeight: FontWeight.w500)),
-                          ),
-                        )).toList(),
+                        tabs: categories
+                            .map(
+                              (name) => Tab(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18.0,
+                                    vertical: 8.0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(20.0),
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ],
                   ),
@@ -155,10 +175,15 @@ class _HomePageState extends State<HomePage> {
             children: categories.map((category) {
               final filteredPackages = category == 'All'
                   ? mealPackages
-                  : mealPackages.where((meal) => meal['type'] == category).toList();
+                  : mealPackages
+                        .where((meal) => meal['type'] == category)
+                        .toList();
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 15.0, vertical: 10.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15.0,
+                  vertical: 10.0,
+                ),
                 itemCount: filteredPackages.length + 1,
                 itemBuilder: (context, index) {
                   if (index == 0) {
@@ -169,11 +194,17 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text(
                             'Available Packages',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
                           ),
                           Text(
                             'From local home-based vendors in your area',
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -185,6 +216,7 @@ class _HomePageState extends State<HomePage> {
                     type: mealMap['type'] as String,
                     title: mealMap['title'] as String,
                     vendor: mealMap['vendor'] as String,
+                    vendorId: 'placeholder_id',
                     desc: mealMap['desc'] as String,
                     price: mealMap['price'] as int,
                     left: mealMap['left'] as int,
@@ -272,15 +304,15 @@ class _HomePageState extends State<HomePage> {
               // This is the notifications icon - open notifications
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const NotificationsPage()),
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsPage(),
+                ),
               );
             } else {
               // This is the shopping bag icon - open cart
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const CartPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const CartPage()),
               ).then((_) {
                 setState(() {});
               });
@@ -332,7 +364,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-          )
+          ),
       ],
     );
   }
@@ -372,11 +404,20 @@ class _HomePageState extends State<HomePage> {
       showUnselectedLabels: true,
       type: BottomNavigationBarType.fixed,
       backgroundColor: Colors.white,
-      selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+      selectedLabelStyle: const TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
       items: const [
         BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Profile'),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.receipt_long_rounded),
+          label: 'Orders',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline_rounded),
+          label: 'Profile',
+        ),
       ],
       onTap: (index) {
         if (index == 0) {

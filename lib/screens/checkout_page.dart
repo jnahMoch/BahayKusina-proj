@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
-=======
 import 'package:google_maps_flutter/google_maps_flutter.dart';
->>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/orders_provider.dart';
@@ -15,13 +12,7 @@ import 'order_confirmation_page.dart';
 import '../services/firestore_service.dart';
 
 class CheckoutPage extends StatefulWidget {
-<<<<<<< HEAD
-  final CartProvider cartProvider;
-
-  const CheckoutPage({super.key, required this.cartProvider});
-=======
   const CheckoutPage({super.key});
->>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
@@ -58,7 +49,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
     _contactController = TextEditingController(text: '+63 917 123 4567');
     _instructionsController = TextEditingController();
-    
+
     // Initialize location after a short delay to allow map to be ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _geocodeAddress();
@@ -80,56 +71,62 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       );
     });
-    
-    _mapController?.animateCamera(
-      CameraUpdate.newLatLng(position),
-    );
+
+    _mapController?.animateCamera(CameraUpdate.newLatLng(position));
   }
 
   Future<void> _geocodeAddress() async {
     if (_addressController.text.isEmpty) return;
-    
+
     setState(() => _isGeocodingAddress = true);
-    
-    final location = await _geocodingService.getCoordinatesFromAddress(_addressController.text);
-    
+
+    final location = await _geocodingService.getCoordinatesFromAddress(
+      _addressController.text,
+    );
+
     if (location != null) {
       _updateMarker(location);
     }
-    
+
     setState(() => _isGeocodingAddress = false);
   }
 
   Future<void> _reverseGeocode(LatLng position) async {
     setState(() => _isGeocodingAddress = true);
-    
+
     final address = await _geocodingService.getAddressFromCoordinates(position);
-    
+
     if (address != null) {
       _addressController.text = address;
     }
-    
+
     _updateMarker(position);
     setState(() => _isGeocodingAddress = false);
   }
 
   Future<void> _getCurrentLocation() async {
     setState(() => _isLoadingLocation = true);
-    
+
     final location = await _locationService.getCurrentLocation();
-    
+
     if (location != null) {
-      final address = await _geocodingService.getAddressFromCoordinates(location);
+      final address = await _geocodingService.getAddressFromCoordinates(
+        location,
+      );
       if (address != null) {
         _addressController.text = address;
       }
       _updateMarker(location);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not get current location. Please check permissions.')),
+        const SnackBar(
+          content: Text(
+            'Could not get current location. Please check permissions.',
+          ),
+        ),
       );
     }
-    
+
     setState(() => _isLoadingLocation = false);
   }
 
@@ -155,8 +152,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         '#ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(0, 6)}';
 
     // Create order items from cart
-<<<<<<< HEAD
-    final orderItems = widget.cartProvider.items
+    final orderItems = cartProvider.items
         .map(
           (cartItem) => OrderItem(
             mealTitle: cartItem.meal.title,
@@ -164,21 +160,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
             pricePerUnit: cartItem.meal.price,
           ),
         )
-=======
-    final orderItems = cartProvider.items
-        .map((cartItem) => OrderItem(
-              mealTitle: cartItem.meal.title,
-              quantity: cartItem.quantity,
-              pricePerUnit: cartItem.meal.price,
-            ))
->>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
         .toList();
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.currentUser;
 
     // Get vendor info from the first item in the cart
-    final firstItem = widget.cartProvider.items[0].meal;
+    final firstItem = cartProvider.items[0].meal;
 
     // Create order
     final order = Order(
@@ -207,13 +195,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
     OrdersProvider().addOrder(order);
 
     // Trigger Notification
-    NotificationService().addNotification(NotificationModel(
-      title: 'Order Placed!',
-      message: 'Your order $orderId has been successfully placed and is being processed.',
-      time: 'Just now',
-      icon: Icons.shopping_bag_rounded,
-      iconColor: primaryOrange,
-    ));
+    NotificationService().addNotification(
+      NotificationModel(
+        title: 'Order Placed!',
+        message:
+            'Your order $orderId has been successfully placed and is being processed.',
+        time: 'Just now',
+        icon: Icons.shopping_bag_rounded,
+        iconColor: primaryOrange,
+      ),
+    );
 
     Navigator.pushReplacement(
       context,
@@ -231,7 +222,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
 
     cartProvider.clearCart();
-    cartProvider.clearCart(); // Clear from local too (redundant but safe)
   }
 
   @override
@@ -435,8 +425,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
             fillColor: Colors.grey.shade100,
             hintText: 'Enter your delivery address',
             suffixIcon: IconButton(
-              icon: _isLoadingLocation 
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              icon: _isLoadingLocation
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.my_location, color: primaryOrange),
               onPressed: _isLoadingLocation ? null : _getCurrentLocation,
               tooltip: 'Use current location',
@@ -445,16 +439,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide.none,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
-<<<<<<< HEAD
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
-      ),
-=======
         const SizedBox(height: 12),
         _buildAddressLabels(),
         const SizedBox(height: 12),
@@ -478,8 +468,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   final latLng = await _mapController?.getVisibleRegion();
                   if (latLng != null) {
                     final center = LatLng(
-                      (latLng.northeast.latitude + latLng.southwest.latitude) / 2,
-                      (latLng.northeast.longitude + latLng.southwest.longitude) / 2,
+                      (latLng.northeast.latitude + latLng.southwest.latitude) /
+                          2,
+                      (latLng.northeast.longitude +
+                              latLng.southwest.longitude) /
+                          2,
                     );
                     _reverseGeocode(center);
                   }
@@ -516,7 +509,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     FloatingActionButton.small(
                       heroTag: 'center_map',
                       backgroundColor: Colors.white,
-                      child: const Icon(Icons.center_focus_strong, color: primaryOrange),
+                      child: const Icon(
+                        Icons.center_focus_strong,
+                        color: primaryOrange,
+                      ),
                       onPressed: () {
                         if (_selectedLocation != null) {
                           _mapController?.animateCamera(
@@ -534,8 +530,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         final latLng = await _mapController?.getVisibleRegion();
                         if (latLng != null) {
                           final center = LatLng(
-                            (latLng.northeast.latitude + latLng.southwest.latitude) / 2,
-                            (latLng.northeast.longitude + latLng.southwest.longitude) / 2,
+                            (latLng.northeast.latitude +
+                                    latLng.southwest.latitude) /
+                                2,
+                            (latLng.northeast.longitude +
+                                    latLng.southwest.longitude) /
+                                2,
                           );
                           _reverseGeocode(center);
                         }
@@ -588,7 +588,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
         );
       }).toList(),
->>>>>>> 8af53264263845ddf2425b7142ad594cf2f29802
     );
   }
 
