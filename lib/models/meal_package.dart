@@ -9,8 +9,10 @@ class MealPackage {
   final String vendorId;
   final String desc;
   final int price;
-  final int left;
+  final int left; // Stock/Quantity Available
   final String imageUrl;
+  final List<String> packageItems; // New field
+  final bool isAvailable; // New field
 
   const MealPackage({
     this.id = '',
@@ -22,6 +24,8 @@ class MealPackage {
     required this.price,
     required this.left,
     required this.imageUrl,
+    this.packageItems = const [],
+    this.isAvailable = true,
   });
 
   // OOP: Logic lives in the data model
