@@ -8,6 +8,7 @@ import 'dart:io';
 import '../providers/auth_provider.dart';
 import '../providers/vendor_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AddPackagePage extends StatefulWidget {
   final String? packageId;
@@ -51,6 +52,7 @@ class _AddPackagePageState extends State<AddPackagePage> {
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
   bool _isSaving = false;
+  double _uploadProgress = 0.0;
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
@@ -207,9 +209,53 @@ class _AddPackagePageState extends State<AddPackagePage> {
           ),
           if (_isSaving)
             Container(
-              color: Colors.black26,
-              child: const Center(
-                child: CircularProgressIndicator(color: primaryOrange),
+              color: Colors.black54,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_uploadProgress > 0 && _uploadProgress < 1)
+                      Column(
+                        children: [
+                          SizedBox(
+                            width: 200,
+                            child: LinearProgressIndicator(
+                              value: _uploadProgress,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                primaryOrange,
+                              ),
+                              minHeight: 8,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Uploading image... ${(_uploadProgress * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      const Column(
+                        children: [
+                          CircularProgressIndicator(color: primaryOrange),
+                          SizedBox(height: 16),
+                          Text(
+                            'Saving package...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -312,9 +358,65 @@ class _AddPackagePageState extends State<AddPackagePage> {
     }
   }
 
+  Future<String?> _uploadImageToStorage(String vendorId) async {
+    if (_selectedImage == null) return null;
+
+    try {
+      // Create a unique filename
+      final String fileName =
+          'package_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String filePath = 'vendors/$vendorId/packages/$fileName';
+
+      // Create reference to Firebase Storage
+      final Reference storageRef =
+          FirebaseStorage.instance.ref().child(filePath);
+
+      // Upload file
+      UploadTask uploadTask;
+      if (kIsWeb) {
+        // For web, read bytes
+        final bytes = await _selectedImage!.readAsBytes();
+        uploadTask = storageRef.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+      } else {
+        // For mobile, use File
+        final file = File(_selectedImage!.path);
+        uploadTask = storageRef.putFile(file);
+      }
+
+      // Track upload progress
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        if (mounted) {
+          setState(() {
+            _uploadProgress =
+                snapshot.bytesTransferred / snapshot.totalBytes;
+          });
+        }
+      });
+
+      // Wait for upload to complete
+      final TaskSnapshot taskSnapshot = await uploadTask;
+      // Get download URL
+      final String downloadUrl = await taskSnapshot.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Image upload failed: $e')),
+        );
+      }
+      return null;
+    }
+  }
+
   Future<void> _saveForm() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isSaving = true);
+      setState(() {
+        _isSaving = true;
+        _uploadProgress = 0.0;
+      });
 
       try {
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -338,14 +440,26 @@ class _AddPackagePageState extends State<AddPackagePage> {
             widget.packageId!.isNotEmpty &&
             !widget.packageId!.startsWith('fallback_');
 
-        if (!isEditing) {
-          // Add new
-          // In a real app, you would upload the image to Firebase Storage first
+        // Upload image if selected
+        if (_selectedImage != null) {
+          final imageUrl = await _uploadImageToStorage(vendorId);
+          if (imageUrl != null) {
+            data['imageUrl'] = imageUrl;
+          } else {
+            // Upload failed, use placeholder
+            data['imageUrl'] = 'assets/images/food_package_1.jpg';
+          }
+        } else if (!isEditing) {
+          // No image selected for new package, use placeholder
           data['imageUrl'] = 'assets/images/food_package_1.jpg';
+        }
+
+        if (!isEditing) {
+          // Add new package
           data['createdAt'] = FieldValue.serverTimestamp();
           await FirebaseFirestore.instance.collection('meals').add(data);
-        } else if (isEditing) {
-          // Update existing
+        } else {
+          // Update existing package
           await FirebaseFirestore.instance
               .collection('meals')
               .doc(widget.packageId)
@@ -364,6 +478,7 @@ class _AddPackagePageState extends State<AddPackagePage> {
               content: Text(
                 !isEditing ? "Package Published!" : "Package Updated!",
               ),
+              backgroundColor: Colors.green,
             ),
           );
           Navigator.pop(context);
@@ -372,10 +487,20 @@ class _AddPackagePageState extends State<AddPackagePage> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text("Error: $e")));
+          ).showSnackBar(
+            SnackBar(
+              content: Text("Error: $e"),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       } finally {
-        if (mounted) setState(() => _isSaving = false);
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+            _uploadProgress = 0.0;
+          });
+        }
       }
     }
   }

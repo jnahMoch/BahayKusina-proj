@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'manage_packages_view.dart';
 import 'orders_view.dart';
+import 'edit_profile_page.dart';
+import 'addresses_page.dart';
+import 'notifications.dart';
+import 'settings_page.dart';
 import '../providers/vendor_provider.dart';
 import '../providers/auth_provider.dart';
 
@@ -15,6 +19,125 @@ class VendorHomePage extends StatefulWidget {
 }
 
 class _VendorHomePageState extends State<VendorHomePage> {
+    void _openProfileDrawer() {
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (context) {
+          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+          final user = authProvider.currentUser;
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.orange.shade100,
+                      child: const Icon(Icons.store, color: Colors.deepOrange, size: 32),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user?.fullName ?? "Vendor Name", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        Text(user?.email ?? "vendor@email.com", style: const TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.edit),
+                  title: const Text('Edit Profile'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const EditProfilePage()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.location_on),
+                  title: const Text('My Addresses'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AddressesPage()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.notifications),
+                  title: const Text('Notifications'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const NotificationsPage()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.settings),
+                  title: const Text('Settings'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SettingsPage()),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('Help Center'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Help Center - Coming Soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip),
+                  title: const Text('Privacy Policy'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Privacy Policy - Coming Soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: const Text('Log Out', style: TextStyle(color: Colors.red)),
+                  onTap: () async {
+                    await authProvider.logout();
+                    if (mounted) {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
   int _selectedIndex = 0; // 0: Dashboard, 1: Manage, 2: Orders
 
   static const Color primaryOrange = Color(0xFFFF6B00);
@@ -41,6 +164,28 @@ class _VendorHomePageState extends State<VendorHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        backgroundColor: primaryOrange,
+        elevation: 0,
+        title: const Text('Vendor Dashboard', style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.account_circle, color: Colors.white),
+            onPressed: _openProfileDrawer,
+            tooltip: 'Profile',
+          ),
+        ],
+      ),
+      floatingActionButton: _selectedIndex == 1
+          ? FloatingActionButton.extended(
+              backgroundColor: primaryOrange,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Package'),
+              onPressed: () {
+                // 
+              },
+            )
+          : null,
       body: Consumer<VendorProvider>(
         builder: (context, vendorProvider, child) {
           if (vendorProvider.isLoading && vendorProvider.orders.isEmpty) {
@@ -48,7 +193,6 @@ class _VendorHomePageState extends State<VendorHomePage> {
               child: CircularProgressIndicator(color: primaryOrange),
             );
           }
-
           return Column(
             children: [
               _buildHeader(context),
@@ -69,7 +213,6 @@ class _VendorHomePageState extends State<VendorHomePage> {
                         ],
                       ),
                     ),
-
                     Positioned(
                       bottom: 20,
                       left: 0,

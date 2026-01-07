@@ -3,20 +3,32 @@
 import 'package:flutter/material.dart';
 import '../utils/logger.dart';
 
+enum NotificationType {
+  order,
+  promotion,
+  system,
+}
+
 class NotificationModel {
   final String title;
   final String message;
   final String time;
+  final DateTime? timestamp;
   final IconData icon;
   final Color iconColor;
+  final NotificationType type;
+  final String? orderId;
   bool isRead;
 
   NotificationModel({
     required this.title,
     required this.message,
     required this.time,
+    this.timestamp,
     required this.icon,
     this.iconColor = Colors.blue,
+    this.type = NotificationType.system,
+    this.orderId,
     this.isRead = false,
   });
 }
@@ -42,11 +54,23 @@ class NotificationService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void markAsRead(NotificationModel notification) {
+    notification.isRead = true;
+    AppLogger.info('Notification marked as read: ${notification.title}');
+    notifyListeners();
+  }
+
   void markAllAsRead() {
     for (var notification in _notifications) {
       notification.isRead = true;
     }
     AppLogger.info('All notifications marked as read.');
+    notifyListeners();
+  }
+
+  void removeNotification(NotificationModel notification) {
+    _notifications.remove(notification);
+    AppLogger.info('Notification removed: ${notification.title}');
     notifyListeners();
   }
 

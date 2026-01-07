@@ -132,10 +132,12 @@ class _SignUpPageState extends State<SignUpPage> {
                     const SizedBox(height: 10),
                     _buildRoleSelector(),
                     const SizedBox(height: 25),
-                    _buildLabel("Full Name"),
+                    _buildLabel(selectedRole == "Sell Food" ? "Full Name" : "Full Name"),
                     SignupTextField(
                       controller: _nameController,
-                      hint: "Juan Dela Cruz",
+                      hint: selectedRole == "Sell Food" 
+                          ? "Your business name or personal name" 
+                          : "Juan Dela Cruz",
                       keyboardType: TextInputType.name,
                     ),
                     const SizedBox(height: 20),
@@ -153,7 +155,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 20),
-                    _buildLabel("Delivery Address"),
+                    _buildLabel(selectedRole == "Sell Food" ? "Business Address" : "Delivery Address"),
                     SignupTextField(
                       controller: _addressController,
                       hint: "123 Mabini St., Barangay San Juan, Manila",
@@ -184,6 +186,8 @@ class _SignUpPageState extends State<SignUpPage> {
                     _buildTermsAndConditions(),
                     const SizedBox(height: 20),
                     _buildSubmitButton(),
+                    const SizedBox(height: 15),
+                    _buildLoginLink(),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -308,14 +312,14 @@ class _SignUpPageState extends State<SignUpPage> {
         children: [
           const TextSpan(text: "By signing up, you agree to our "),
           TextSpan(
-            text: "Terms & Conditions",
+            text: "Terms of Service",
             style: const TextStyle(
               color: AppColors.primaryOrange,
               fontWeight: FontWeight.bold,
             ),
             recognizer: TapGestureRecognizer()
               ..onTap = () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Terms & Conditions")),
+                const SnackBar(content: Text("Terms of Service")),
               ),
           ),
           const TextSpan(text: " and "),
@@ -366,6 +370,28 @@ class _SignUpPageState extends State<SignUpPage> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildLoginLink() {
+    return Center(
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black54, fontSize: 14),
+          children: [
+            const TextSpan(text: "Already have an account? "),
+            TextSpan(
+              text: "Log In",
+              style: const TextStyle(
+                color: AppColors.primaryOrange,
+                fontWeight: FontWeight.bold,
+              ),
+              recognizer: TapGestureRecognizer()
+                ..onTap = () => Navigator.pop(context),
+            ),
+          ],
+        ),
       ),
     );
   }
