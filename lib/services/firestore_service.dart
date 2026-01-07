@@ -1,5 +1,6 @@
 // lib/services/firestore_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/meal_package.dart';
 import '../models/order.dart' as order_models;
 import '../utils/logger.dart';
@@ -105,8 +106,14 @@ class FirestoreService {
         'deliveryAddress': orderData.deliveryAddress,
         'contactNumber': orderData.contactNumber,
         'paymentMethod': orderData.paymentMethod,
-        'riderName': orderData.riderName,
-        'riderEta': orderData.riderEta,
+        'riderName': orderData.riderName ?? '',
+        'riderEta': orderData.riderEta ?? '',
+        'deliveryCoordinates': orderData.deliveryCoordinates != null
+            ? {
+                'latitude': orderData.deliveryCoordinates!.latitude,
+                'longitude': orderData.deliveryCoordinates!.longitude,
+              }
+            : null,
       };
 
       // Save to user's orders subcollection
@@ -138,6 +145,80 @@ class FirestoreService {
     } catch (e) {
       AppLogger.error('Error fetching user orders: $e');
       return [];
+    }
+  }
+
+  Stream<order_models.Order?> streamOrder(String orderId) {
+    print('✓ FirestoreService.streamOrder - Starting stream for orderId: "$orderId"');
+    
+    try {
+      return _db
+          .collection('orders')
+          .doc(orderId)
+          .snapshots()
+          .map((snapshot) {
+            print('✓ FirestoreService.streamOrder - Snapshot received, exists: ${snapshot.exists}');
+            
+            if (!snapshot.exists) {
+              print('✗ FirestoreService.streamOrder - Order "$orderId" not found in Firestore');
+              return null;
+            }
+            
+            final data = snapshot.data() as Map<String, dynamic>;
+            print('✓ FirestoreService.streamOrder - Order data keys: ${data.keys.toList()}');
+            
+            // Parse delivery coordinates if available
+            LatLng? deliveryCoordinates;
+            if (data['deliveryCoordinates'] != null) {
+              final coords = data['deliveryCoordinates'] as Map<String, dynamic>;
+              deliveryCoordinates = LatLng(
+                coords['latitude'] as double,
+                coords['longitude'] as double,
+              );
+            }
+            
+            // Safe date parsing
+            DateTime orderDate = DateTime.now();
+            if (data['orderDate'] != null) {
+              try {
+                orderDate = (data['orderDate'] as Timestamp).toDate();
+              } catch (e) {
+                print('✗ FirestoreService.streamOrder - Could not parse orderDate: $e');
+              }
+            }
+            
+            final order = order_models.Order(
+              orderId: data['orderId'] ?? '',
+              orderDate: orderDate,
+              items: (data['items'] as List?)
+                  ?.map(
+                    (item) => order_models.OrderItem(
+                      mealTitle: item['mealTitle'] ?? '',
+                      quantity: (item['quantity'] ?? 0).toInt(),
+                      pricePerUnit: (item['pricePerUnit'] ?? 0).toInt(),
+                    ),
+                  )
+                  .toList() ?? [],
+              totalAmount: (data['totalAmount'] ?? 0).toInt(),
+              status: _parseOrderStatus(data['status'] ?? 'pending'),
+              vendorId: data['vendorId'] ?? '',
+              vendorName: data['vendorName'] ?? '',
+              customerName: data['customerName'] ?? 'Customer',
+              deliveryAddress: data['deliveryAddress'] ?? '',
+              contactNumber: data['contactNumber'] ?? '',
+              paymentMethod: data['paymentMethod'] ?? '',
+              riderName: data['riderName']?.toString().isEmpty == true ? null : data['riderName'],
+              riderEta: data['riderEta']?.toString().isEmpty == true ? null : data['riderEta'],
+              deliveryCoordinates: deliveryCoordinates,
+            );
+            
+            print('✓ FirestoreService.streamOrder - Order parsed successfully: ${order.orderId}, status: ${order.status}');
+            return order;
+          });
+    } catch (e) {
+      AppLogger.error('Error streaming order: $e');
+      print('✗ FirestoreService.streamOrder - Error: $e');
+      return Stream.error(e);
     }
   }
 
@@ -291,6 +372,10 @@ class FirestoreService {
     switch (status.toLowerCase()) {
       case 'pending':
         return order_models.OrderStatus.pending;
+      case 'confirmed':
+        return order_models.OrderStatus.confirmed;
+      case 'preparing':
+        return order_models.OrderStatus.preparing;
       case 'outfordelivery':
         return order_models.OrderStatus.outForDelivery;
       case 'delivered':

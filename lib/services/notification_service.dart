@@ -1,6 +1,7 @@
 // lib/services/notification_service.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/logger.dart';
 
 enum NotificationType {
@@ -47,11 +48,25 @@ class NotificationService extends ChangeNotifier {
 
   int get unreadCount => _notifications.where((n) => !n.isRead).length;
 
-  void addNotification(NotificationModel notification) {
-    _notifications.insert(0, notification);
-    // In a real app, you would also persist this notification
-    AppLogger.info('Notification added: ${notification.title}');
-    notifyListeners();
+  Future<void> addNotification(NotificationModel notification) async {
+    // Check if notifications are enabled based on type
+    final prefs = await SharedPreferences.getInstance();
+    
+    bool shouldAdd = true;
+    
+    if (notification.type == NotificationType.order) {
+      shouldAdd = prefs.getBool('orderNotifications') ?? true;
+    } else if (notification.type == NotificationType.promotion) {
+      shouldAdd = prefs.getBool('promoNotifications') ?? false;
+    }
+    
+    if (shouldAdd) {
+      _notifications.insert(0, notification);
+      AppLogger.info('Notification added: ${notification.title}');
+      notifyListeners();
+    } else {
+      AppLogger.info('Notification blocked by settings: ${notification.title}');
+    }
   }
 
   void markAsRead(NotificationModel notification) {

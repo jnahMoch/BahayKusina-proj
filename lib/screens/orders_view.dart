@@ -6,6 +6,7 @@ import '../providers/vendor_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/order.dart' as order_models;
 import 'package:intl/intl.dart';
+import 'vendor_order_details_page.dart';
 
 class OrdersView extends StatelessWidget {
   const OrdersView({super.key});
@@ -95,59 +96,68 @@ class _OrderCard extends StatelessWidget {
     final timeStr = DateFormat('hh:mm a').format(order.orderDate);
     final dateStr = DateFormat('MMM dd').format(order.orderDate);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VendorOrderDetailsPage(order: order),
           ),
-        ],
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                order.orderId,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-              ),
-              _buildStatusBadge(order.status),
-            ],
-          ),
-          const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                order.customerName,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (order.contactNumber.isNotEmpty)
-                IconButton(
-                  icon: const Icon(
-                    Icons.phone_outlined,
-                    color: Colors.blue,
-                    size: 20,
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  order.orderId,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                    fontSize: 12,
                   ),
-                  onPressed: () {
-                    // In a real app, uses url_launcher to dial
-                  },
+                ),
+                _buildStatusBadge(order.status),
+              ],
+            ),
+            const Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  order.customerName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (order.contactNumber.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.phone_outlined,
+                      color: Colors.blue,
+                      size: 20,
+                    ),
+                    onPressed: () {
+                      // In a real app, uses url_launcher to dial
+                    },
                 ),
             ],
           ),
@@ -243,6 +253,7 @@ class _OrderCard extends StatelessWidget {
           _buildTrackingActions(context),
         ],
       ),
+    ),
     );
   }
 
@@ -254,6 +265,14 @@ class _OrderCard extends StatelessWidget {
       case order_models.OrderStatus.pending:
         color = Colors.orange;
         text = "Pending";
+        break;
+      case order_models.OrderStatus.confirmed:
+        color = const Color(0xFF2196F3);
+        text = "Confirmed";
+        break;
+      case order_models.OrderStatus.preparing:
+        color = const Color(0xFFFF8C3B);
+        text = "Preparing";
         break;
       case order_models.OrderStatus.outForDelivery:
         color = Colors.blue;

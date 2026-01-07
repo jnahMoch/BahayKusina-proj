@@ -2,7 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-enum OrderStatus { outForDelivery, delivered, pending, cancelled }
+enum OrderStatus { 
+  pending, 
+  confirmed, 
+  preparing, 
+  outForDelivery, 
+  delivered, 
+  cancelled 
+}
 
 class OrderItem {
   final String mealTitle;
@@ -57,6 +64,10 @@ class Order {
         return const Color(0xFF4CAF50);
       case OrderStatus.outForDelivery:
         return const Color(0xFFFF6B00);
+      case OrderStatus.preparing:
+        return const Color(0xFFFF8C3B);
+      case OrderStatus.confirmed:
+        return const Color(0xFF2196F3);
       case OrderStatus.pending:
         return Colors.blue;
       case OrderStatus.cancelled:
@@ -70,6 +81,10 @@ class Order {
         return 'Delivered';
       case OrderStatus.outForDelivery:
         return 'Out for Delivery';
+      case OrderStatus.preparing:
+        return 'Preparing';
+      case OrderStatus.confirmed:
+        return 'Confirmed';
       case OrderStatus.pending:
         return 'Pending';
       case OrderStatus.cancelled:

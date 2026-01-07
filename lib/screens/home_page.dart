@@ -274,10 +274,14 @@ class _HomePageState extends State<HomePage> {
       children: [
         Row(
           children: [
-            const Icon(
-              Icons.bakery_dining_outlined,
-              color: Colors.white,
-              size: 40,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset(
+                'assets/images/bahay_kusina_logo.png',
+                width: 40,
+                height: 40,
+                fit: BoxFit.cover,
+              ),
             ),
             const SizedBox(width: 12),
             Column(

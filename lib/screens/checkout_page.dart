@@ -23,6 +23,7 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   static const Color primaryOrange = Color(0xFFFF6B00);
 
+  late TextEditingController _nameController;
   late TextEditingController _addressController;
   late TextEditingController _contactController;
   late TextEditingController _instructionsController;
@@ -44,10 +45,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void initState() {
     super.initState();
-    _addressController = TextEditingController(
-      text: '123 Mabini St., Barangay San Juan, Manila',
+    
+    // Load user data from AuthProvider
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    
+    _nameController = TextEditingController(
+      text: user?.fullName ?? 'Juan Dela Cruz',
     );
-    _contactController = TextEditingController(text: '+63 917 123 4567');
+    _addressController = TextEditingController(
+      text: user?.address ?? '123 Mabini St., Barangay San Juan, Manila',
+    );
+    _contactController = TextEditingController(
+      text: user?.phone ?? '+63 917 123 4567',
+    );
     _instructionsController = TextEditingController();
 
     // Initialize location after a short delay to allow map to be ready
@@ -132,6 +143,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _addressController.dispose();
     _contactController.dispose();
     _instructionsController.dispose();
@@ -140,9 +152,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _placeOrder() {
     final cartProvider = context.read<CartProvider>();
-    if (_addressController.text.isEmpty || _contactController.text.isEmpty) {
+    if (_nameController.text.isEmpty || _addressController.text.isEmpty || _contactController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in delivery details')),
+        const SnackBar(content: Text('Please fill in all delivery details')),
       );
       return;
     }
@@ -177,7 +189,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       status: OrderStatus.pending,
       vendorId: firstItem.vendorId,
       vendorName: firstItem.vendor,
-      customerName: user?.fullName ?? 'Guest Customer',
+      customerName: _nameController.text,
       deliveryAddress: _addressController.text,
       contactNumber: _contactController.text,
       paymentMethod: _selectedPaymentMethod,
@@ -254,6 +266,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
               const SizedBox(height: 12),
               _buildPaymentMethods(),
               const SizedBox(height: 30),
+
+              // Full Name
+              _buildSectionTitle('Full Name'),
+              const SizedBox(height: 12),
+              _buildNameField(),
+              const SizedBox(height: 15),
 
               // Delivery Address Section
               _buildSectionTitle('Delivery Address'),
@@ -591,10 +609,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
+  Widget _buildNameField() {
+    return TextField(
+      controller: _nameController,
+      decoration: InputDecoration(
+        hintText: 'Enter your full name',
+        hintStyle: TextStyle(color: Colors.grey.shade400),
+        filled: true,
+        fillColor: Colors.grey.shade100,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+      ),
+    );
+  }
+
   Widget _buildContactField() {
     return TextField(
       controller: _contactController,
+      keyboardType: TextInputType.phone,
       decoration: InputDecoration(
+        hintText: 'Enter your contact number',
+        hintStyle: TextStyle(color: Colors.grey.shade400),
         filled: true,
         fillColor: Colors.grey.shade100,
         border: OutlineInputBorder(

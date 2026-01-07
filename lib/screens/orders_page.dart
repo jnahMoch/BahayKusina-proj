@@ -124,23 +124,43 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 
   Widget _buildOrderCard(order_models.Order order) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Order header with badge
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade200),
+              ),
+            ),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  order.orderId,
+                  'Order #${order.orderId.replaceAll('ORD-', '')}',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F3557),
                   ),
                 ),
                 Container(
@@ -149,224 +169,350 @@ class _OrdersPageState extends State<OrdersPage> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: order.statusColor.withOpacity(0.15),
-                    border: Border.all(color: order.statusColor, width: 1.5),
+                    color: _getStatusColor(order.status),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    order.statusText,
-                    style: TextStyle(
+                    _getStatusBadgeText(order.status),
+                    style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: order.statusColor,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: 14,
-                  color: Colors.grey.shade600,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _formatDate(order.orderDate),
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 1,
-              color: Colors.grey.shade200,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            Column(
+          ),
+
+          // Customer details
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: order.items.map((item) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+              children: [
+                // Customer name
+                Row(
+                  children: [
+                    const Text(
+                      'Customer: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      order.customerName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                
+                // Contact
+                Row(
+                  children: [
+                    const Text(
+                      'Contact: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      order.contactNumber,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Address
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Address: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        order.deliveryAddress,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Payment & Date
+                Row(
+                  children: [
+                    const Text(
+                      'Payment: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      order.paymentMethod.isNotEmpty 
+                        ? '${order.paymentMethod} (pending)'
+                        : 'COD (pending)',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Order Date
+                Row(
+                  children: [
+                    const Text(
+                      'Date: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      _formatDateFull(order.orderDate),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Total Amount
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.mealTitle,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Qty: ${item.quantity}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                          ],
+                      const Text(
+                        'Total Amount',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
                         ),
                       ),
                       Text(
-                        '₱${item.totalPrice}',
+                        '₱${order.totalAmount}',
                         style: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: OrdersPage.primaryOrange,
                         ),
                       ),
                     ],
                   ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 1,
-              color: Colors.grey.shade200,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Total',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
-                Text(
-                  '₱${order.totalAmount}',
-                  style: const TextStyle(
-                    fontSize: 15,
+                const SizedBox(height: 16),
+
+                // Order Items header
+                const Text(
+                  'Order Items:',
+                  style: TextStyle(
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: OrdersPage.primaryOrange,
                   ),
                 ),
-              ],
-            ),
-            if (order.status == order_models.OrderStatus.outForDelivery &&
-                order.riderName != null) ...[
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  border: Border.all(color: Colors.blue.shade200),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                const SizedBox(height: 10),
+
+                // Order items list
+                ...order.items.map((item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 16,
-                          color: Colors.blue.shade700,
+                        Expanded(
+                          child: Text(
+                            '${item.mealTitle} x ${item.quantity}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 8),
                         Text(
-                          'Rider: ${order.riderName}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue.shade700,
+                          '₱${item.totalPrice}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.schedule,
-                          size: 16,
-                          color: Colors.blue.shade700,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'ETA: ${order.riderEta}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 15),
-            SizedBox(
-              width: double.infinity,
-              height: 45,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => TrackOrderPage(
-                        orderId: order.orderId
-                            .replaceAll('#', '')
-                            .replaceAll('ORD-', ''),
-                        riderName: order.riderName ?? 'Pending Assignment',
-                        eta: order.riderEta ?? 'Calculating...',
-                        deliveryAddress: order.deliveryAddress,
-                        deliveryLocation: order.deliveryCoordinates,
-                      ),
                     ),
                   );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: OrdersPage.primaryOrange,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                }),
+                const SizedBox(height: 16),
+
+                // Status Dropdown
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  foregroundColor: Colors.white,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      canvasColor: Colors.white,
+                    ),
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      underline: Container(),
+                      value: _getStatusValue(order.status),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'pending',
+                          child: Text('Pending'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'confirmed',
+                          child: Text('Confirmed'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'preparing',
+                          child: Text('Preparing'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'outForDelivery',
+                          child: Text('Out for Delivery'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'delivered',
+                          child: Text('Delivered'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'cancelled',
+                          child: Text('Cancelled'),
+                        ),
+                      ],
+                      onChanged: (_) {
+                        // Status is read-only for customers
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Order status is managed by vendor'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-                icon: const Icon(Icons.location_on, size: 18),
-                label: const Text(
-                  'Track Order',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-              ),
+                const SizedBox(height: 16),
+
+                // Track Order button
+                if (order.status == order_models.OrderStatus.outForDelivery) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TrackOrderPage(
+                              orderId: order.orderId,
+                              riderName: order.riderName ?? 'Pending Assignment',
+                              eta: order.riderEta ?? 'Calculating...',
+                              deliveryAddress: order.deliveryAddress,
+                              deliveryLocation: order.deliveryCoordinates,
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: OrdersPage.primaryOrange,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
+                      icon: const Icon(Icons.location_on, size: 18),
+                      label: const Text(
+                        'Track Order',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  String _formatDate(DateTime dateTime) {
+  Color _getStatusColor(order_models.OrderStatus status) {
+    switch (status) {
+      case order_models.OrderStatus.delivered:
+        return const Color(0xFF4CAF50);
+      case order_models.OrderStatus.outForDelivery:
+        return OrdersPage.primaryOrange;
+      case order_models.OrderStatus.preparing:
+        return Colors.amber;
+      case order_models.OrderStatus.confirmed:
+        return Colors.blue;
+      case order_models.OrderStatus.pending:
+        return Colors.grey;
+      case order_models.OrderStatus.cancelled:
+        return Colors.red;
+    }
+  }
+
+  String _getStatusBadgeText(order_models.OrderStatus status) {
+    switch (status) {
+      case order_models.OrderStatus.outForDelivery:
+        return 'Out for Delivery';
+      default:
+        return status.toString().split('.').last.toUpperCase();
+    }
+  }
+
+  String _getStatusValue(order_models.OrderStatus status) {
+    return status.toString().split('.').last;
+  }
+
+  String _formatDateFull(DateTime dateTime) {
     final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     final month = months[dateTime.month - 1];
     final period = dateTime.hour >= 12 ? 'PM' : 'AM';
-    final hour = dateTime.hour % 12 == 12
-        ? 12
-        : (dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12);
+    final hour = dateTime.hour == 0 ? 12 : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
     final minute = dateTime.minute.toString().padLeft(2, '0');
-    return '$month ${dateTime.day}, ${dateTime.year} $hour:$minute $period';
+    return '$month ${dateTime.day}, ${dateTime.year}, $hour:$minute $period';
   }
 }
