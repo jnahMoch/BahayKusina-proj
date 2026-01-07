@@ -262,7 +262,7 @@ class _ProfilePageState extends State<ProfilePage> {
           _buildContactItem(
             icon: Icons.location_on_outlined,
             label: 'Address',
-            value: user.address,
+            value: user.primaryAddress,
           ),
         ],
       ),

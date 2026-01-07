@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/address_model.dart';
 import '../models/auth_user.dart';
 import '../utils/error_handler.dart';
 import '../utils/logger.dart';
@@ -47,12 +48,35 @@ class AuthProvider extends ChangeNotifier {
       _cacheRole(roleStr);
     }
 
+    var addressList = <AddressModel>[];
+    if (profile?['addresses'] != null) {
+      addressList = (profile!['addresses'] as List)
+          .map((a) => AddressModel.fromJson(a as Map<String, dynamic>))
+          .toList();
+    } else if (profile?['address'] != null && profile!['address'] is String) {
+      addressList.add(AddressModel(
+        id: 'default',
+        label: 'Default',
+        fullName: profile['displayName'] ?? user.displayName ?? 'User',
+        phoneNumber: profile['phone'] ?? '',
+        region: '',
+        province: '',
+        city: '',
+        barangay: '',
+        streetAddress: profile['address'] as String,
+        postalCode: '',
+        latitude: 0.0,
+        longitude: 0.0,
+        isDefault: true,
+      ));
+    }
+
     return AuthUser(
       userId: user.uid,
       email: user.email ?? profile?['email'] ?? '',
       fullName: profile?['displayName'] ?? user.displayName ?? 'User',
       phone: profile?['phone'] ?? '',
-      address: profile?['address'] ?? '',
+      addresses: addressList,
       role: role,
       createdAt: user.metadata.creationTime ?? DateTime.now(),
     );
@@ -151,7 +175,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String fullName,
     required String phone,
-    required String address,
+    required List<AddressModel> addresses,
     required UserRole role,
   }) async {
     try {
@@ -181,7 +205,7 @@ class AuthProvider extends ChangeNotifier {
               email: email,
               displayName: fullName,
               phone: phone,
-              address: address,
+              addresses: addresses.map((a) => a.toJson()).toList(),
               role: role.toString().split('.').last,
             ),
           ]).timeout(const Duration(seconds: 10));
@@ -196,7 +220,7 @@ class AuthProvider extends ChangeNotifier {
           'email': email,
           'displayName': fullName,
           'phone': phone,
-          'address': address,
+          'addresses': addresses.map((a) => a.toJson()).toList(),
           'role': role.toString().split('.').last,
         });
 
@@ -265,30 +289,53 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> updateProfile({
     String? fullName,
     String? phone,
-    String? address,
+    List<AddressModel>? addresses,
   }) async {
     try {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      if (fullName != null && _firebaseAuth.currentUser != null) {
-        await _firebaseAuth.currentUser!.updateDisplayName(fullName);
+      print('Updating profile for user: ${_currentUser?.userId}');
+      if (addresses != null) {
+        print('Addresses to update: ${addresses.length}');
+        for (var addr in addresses) {
+          print('Address: ${addr.fullName}, ${addr.streetAddress}');
+        }
       }
 
+      // Update local state first
       if (_currentUser != null) {
-        await FirestoreService().updateUserProfile(
-          userId: _currentUser!.userId,
-          displayName: fullName,
-          phone: phone,
-          address: address,
-        );
-
         _currentUser = _currentUser!.copyWith(
           fullName: fullName,
           phone: phone,
-          address: address,
+          addresses: addresses,
         );
+        print('Profile updated locally, addresses: ${_currentUser!.addresses.length}');
+      }
+
+      // Try to update Firebase display name
+      if (fullName != null && _firebaseAuth.currentUser != null) {
+        try {
+          await _firebaseAuth.currentUser!.updateDisplayName(fullName);
+        } catch (e) {
+          AppLogger.warning('Failed to update Firebase display name: $e');
+        }
+      }
+
+      // Try to update Firestore
+      if (_currentUser != null) {
+        try {
+          await FirestoreService().updateUserProfile(
+            userId: _currentUser!.userId,
+            displayName: fullName,
+            phone: phone,
+            addresses: addresses?.map((a) => a.toJson()).toList(),
+          );
+        } catch (e) {
+          AppLogger.warning('Failed to update Firestore profile: $e');
+          // Don't fail the whole operation, local state is updated
+        }
       }
 
       _isLoading = false;

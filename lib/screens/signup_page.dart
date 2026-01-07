@@ -8,6 +8,8 @@ import '../widgets/signup_text_field.dart';
 import '../utils/logger.dart';
 import 'home_page.dart';
 import 'vendor_home_page.dart';
+import '../models/address_model.dart';
+import 'map_address_picker_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -21,6 +23,7 @@ class _SignUpPageState extends State<SignUpPage> {
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
   bool _isLoading = false;
+  List<AddressModel> _selectedAddresses = [];
   
   // Field error states
   bool _nameError = false;
@@ -79,7 +82,7 @@ class _SignUpPageState extends State<SignUpPage> {
     final name = _nameController.text;
     final email = _emailPhoneController.text;
     final phone = _phoneController.text;
-    final address = _addressController.text;
+    // final address = _addressController.text; // Removed as we use _selectedAddresses now
     final password = _passwordController.text;
     final confirmPassword = _confirmPasswordController.text;
 
@@ -87,7 +90,7 @@ class _SignUpPageState extends State<SignUpPage> {
       _nameError = name.isEmpty;
       _emailError = email.isEmpty || !_isValidEmail(email);
       _phoneError = phone.isEmpty || !_isValidPhone(phone);
-      _addressError = address.isEmpty;
+      _addressError = _selectedAddresses.isEmpty;
       _passwordError = password.isEmpty || !_hasMinLength || !_hasUppercase || !_hasLowercase || !_hasNumber;
       _confirmPasswordError = confirmPassword.isEmpty || confirmPassword != password;
     });
@@ -95,7 +98,7 @@ class _SignUpPageState extends State<SignUpPage> {
     if (_nameError || _emailError || _phoneError || _addressError || _passwordError || _confirmPasswordError) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please correct the errors in the form'),
+          content: Text('Please correct the errors in the form (ensure address is selected)'),
           backgroundColor: Colors.red,
         ),
       );
@@ -122,7 +125,7 @@ class _SignUpPageState extends State<SignUpPage> {
         fullName: name,
         email: email,
         phone: phone,
-        address: address,
+        addresses: _selectedAddresses,
         password: password,
         role: role,
       );
@@ -210,12 +213,30 @@ class _SignUpPageState extends State<SignUpPage> {
                     ),
                     const SizedBox(height: 20),
                     _buildLabel(selectedRole == "Sell Food" ? "Business Address" : "Delivery Address"),
-                    SignupTextField(
-                      controller: _addressController,
-                      hint: "123 Mabini St., Barangay San Juan, Manila",
-                      keyboardType: TextInputType.streetAddress,
-                      hasError: _addressError,
-                      onChanged: (val) => setState(() => _addressError = val.isEmpty),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final result = await Navigator.push<AddressModel>(
+                          context,
+                          MaterialPageRoute(builder: (context) => const MapAddressPickerPage()),
+                        );
+                        if (result != null) {
+                          setState(() {
+                            _selectedAddresses = [result.copyWith(isDefault: true)];
+                            _addressController.text = result.fullAddress;
+                            _addressError = false;
+                          });
+                        }
+                      },
+                      child: IgnorePointer(
+                        child: SignupTextField(
+                          controller: _addressController,
+                          hint: "Tap to select address on map",
+                          keyboardType: TextInputType.streetAddress,
+                          hasError: _addressError,
+                          onChanged: (val) {},
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 20),
                     _buildLabel("Password"),

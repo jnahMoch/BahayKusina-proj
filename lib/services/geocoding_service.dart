@@ -31,18 +31,29 @@ class GeocodingService {
     }
   }
 
-  /// Convert GPS coordinates to a formatted address string
-  /// Returns null if reverse geocoding fails
-  Future<String?> getAddressFromCoordinates(LatLng location) async {
+  /// Convert GPS coordinates to detailed address components
+  Future<Placemark?> getPlaceMarkFromCoordinates(LatLng location) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(
         location.latitude,
         location.longitude,
       );
-
       if (placemarks.isNotEmpty) {
-        final placemark = placemarks.first;
-        
+        return placemarks.first;
+      }
+      return null;
+    } catch (e) {
+      print('Error reverse geocoding: $e');
+      return null;
+    }
+  }
+
+  /// Convert GPS coordinates to a formatted address string
+  /// Returns null if reverse geocoding fails
+  Future<String?> getAddressFromCoordinates(LatLng location) async {
+    try {
+      final placemark = await getPlaceMarkFromCoordinates(location);
+      if (placemark != null) {
         // Build a formatted address from the placemark
         List<String> addressParts = [];
         

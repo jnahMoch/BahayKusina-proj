@@ -1,19 +1,8 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';
-
-class AddressModel {
-  final String title;
-  final String address;
-  final IconData icon;
-  final bool isDefault;
-
-  AddressModel({
-    required this.title,
-    required this.address,
-    required this.icon,
-    this.isDefault = false,
-  });
-}
+import 'package:provider/provider.dart';
+import '../models/address_model.dart';
+import '../providers/auth_provider.dart';
+import 'map_address_picker_page.dart';
 
 class AddressesPage extends StatefulWidget {
   const AddressesPage({super.key});
@@ -23,22 +12,29 @@ class AddressesPage extends StatefulWidget {
 }
 
 class _AddressesPageState extends State<AddressesPage> {
-  final List<AddressModel> _addresses = [
-    AddressModel(
-      title: 'Home',
-      address: '123 Mahogany St, Ecoland, Davao City, 8000',
-      icon: Icons.home_rounded,
-      isDefault: true,
-    ),
-    AddressModel(
-      title: 'Work',
-      address: 'UM Matina Campus, Gen. Douglas MacArthur Hwy, Davao City',
-      icon: Icons.work_rounded,
-    ),
-  ];
+  bool _isLoading = false;
+
+  Future<void> _updateAddresses(List<AddressModel> newAddresses) async {
+    print('Updating addresses: ${newAddresses.length} addresses');
+    setState(() => _isLoading = true);
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.updateProfile(addresses: newAddresses);
+    setState(() => _isLoading = false);
+    
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(authProvider.errorMessage ?? 'Failed to update addresses')),
+      );
+    } else {
+      print('Addresses updated successfully');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthProvider>().currentUser;
+    final addresses = user?.addresses ?? [];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       appBar: AppBar(
@@ -54,11 +50,11 @@ class _AddressesPageState extends State<AddressesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => _showAddAddressDialog(),
+            onPressed: () => _addOrEditAddress(null, addresses),
             child: const Text(
               'Add New',
               style: TextStyle(
-                color: HomePage.primaryOrange,
+                color: Color(0xFFFF6B00),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -66,18 +62,75 @@ class _AddressesPageState extends State<AddressesPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _addresses.length,
-        itemBuilder: (context, index) {
-          final address = _addresses[index];
-          return _buildAddressCard(address);
-        },
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B00)))
+        : addresses.isEmpty 
+          ? _buildEmptyState()
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: addresses.length,
+              itemBuilder: (context, index) {
+                final address = addresses[index];
+                return _buildAddressCard(address, addresses);
+              },
+            ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.location_off_outlined, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            'No addresses saved yet',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => _addOrEditAddress(null, []),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B00),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Add Your First Address', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildAddressCard(AddressModel address) {
+  Future<void> _addOrEditAddress(AddressModel? initialAddress, List<AddressModel> currentAddresses) async {
+    final result = await Navigator.push<AddressModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapAddressPickerPage(initialAddress: initialAddress),
+      ),
+    );
+
+    if (result != null && mounted) {
+      List<AddressModel> newAddresses = List.from(currentAddresses);
+      if (initialAddress == null) {
+        // Adding new
+        if (newAddresses.isEmpty) {
+          newAddresses.add(result.copyWith(isDefault: true));
+        } else {
+          newAddresses.add(result);
+        }
+      } else {
+        // Editing
+        final index = newAddresses.indexWhere((a) => a.id == initialAddress.id);
+        if (index != -1) {
+          newAddresses[index] = result;
+        }
+      }
+      _updateAddresses(newAddresses);
+    }
+  }
+
+  Widget _buildAddressCard(AddressModel address, List<AddressModel> currentAddresses) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -96,15 +149,18 @@ class _AddressesPageState extends State<AddressesPage> {
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: HomePage.primaryOrange.withOpacity(0.1),
+            color: const Color(0xFFFF6B00).withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(address.icon, color: HomePage.primaryOrange),
+          child: Icon(
+            address.label.toLowerCase() == 'work' ? Icons.work_rounded : Icons.home_rounded, 
+            color: const Color(0xFFFF6B00)
+          ),
         ),
         title: Row(
           children: [
             Text(
-              address.title,
+              address.label,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             if (address.isDefault) ...[
@@ -130,21 +186,33 @@ class _AddressesPageState extends State<AddressesPage> {
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8.0),
           child: Text(
-            address.address,
+            address.fullAddress,
             style: TextStyle(color: Colors.grey.shade600, height: 1.4),
           ),
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
             if (value == 'delete') {
-              setState(() {
-                _addresses.remove(address);
-              });
+              List<AddressModel> newAddresses = List.from(currentAddresses);
+              newAddresses.removeWhere((a) => a.id == address.id);
+              // If we deleted the default, make another one default if available
+              if (address.isDefault && newAddresses.isNotEmpty) {
+                 newAddresses[0] = newAddresses[0].copyWith(isDefault: true);
+              }
+              _updateAddresses(newAddresses);
+            } else if (value == 'edit') {
+              _addOrEditAddress(address, currentAddresses);
+            } else if (value == 'default') {
+              List<AddressModel> newAddresses = currentAddresses.map((a) {
+                return a.copyWith(isDefault: a.id == address.id);
+              }).toList();
+              _updateAddresses(newAddresses);
             }
           },
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'edit', child: Text('Edit')),
-            const PopupMenuItem(value: 'default', child: Text('Set as Default')),
+            if (!address.isDefault)
+              const PopupMenuItem(value: 'default', child: Text('Set as Default')),
             const PopupMenuItem(
               value: 'delete',
               child: Text('Delete', style: TextStyle(color: Colors.red)),
@@ -153,92 +221,6 @@ class _AddressesPageState extends State<AddressesPage> {
           icon: const Icon(Icons.more_vert, color: Colors.grey),
         ),
       ),
-    );
-  }
-
-  void _showAddAddressDialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Add New Address',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _buildTextField(label: 'Address Title (e.g., Home, Office)', hint: 'Enter title'),
-            const SizedBox(height: 16),
-            _buildTextField(label: 'Full Address', hint: 'Enter your detailed address', maxLines: 3),
-            const SizedBox(height: 16),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: HomePage.primaryOrange,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text(
-                  'Save Address',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({required String label, required String hint, int maxLines = 1}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade200),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

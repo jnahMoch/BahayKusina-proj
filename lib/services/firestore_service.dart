@@ -312,7 +312,7 @@ class FirestoreService {
     required String email,
     required String displayName,
     required String phone,
-    required String address,
+    required List<Map<String, dynamic>> addresses,
     required String role,
   }) async {
     try {
@@ -320,7 +320,7 @@ class FirestoreService {
         'email': email,
         'displayName': displayName,
         'phone': phone,
-        'address': address,
+        'addresses': addresses,
         'role': role,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -347,7 +347,7 @@ class FirestoreService {
     required String userId,
     String? displayName,
     String? phone,
-    String? address,
+    List<Map<String, dynamic>>? addresses,
     String? email,
   }) async {
     try {
@@ -357,7 +357,7 @@ class FirestoreService {
 
       if (displayName != null) updates['displayName'] = displayName;
       if (phone != null) updates['phone'] = phone;
-      if (address != null) updates['address'] = address;
+      if (addresses != null) updates['addresses'] = addresses;
       if (email != null) updates['email'] = email;
 
       await _db.collection('users').doc(userId).update(updates);

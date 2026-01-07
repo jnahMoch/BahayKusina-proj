@@ -257,7 +257,7 @@ class _VendorHomePageState extends State<VendorHomePage> {
   Widget _buildHeader(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userName = authProvider.currentUser?.fullName ?? "Nanay's Kitchen";
-    final address = authProvider.currentUser?.address ?? "Manila, Philippines";
+    final address = authProvider.currentUser?.primaryAddress ?? "Manila, Philippines";
 
     return Container(
       padding: const EdgeInsets.only(top: 60, bottom: 30, left: 24, right: 24),

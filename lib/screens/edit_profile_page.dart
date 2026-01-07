@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../models/address_model.dart';
+import 'map_address_picker_page.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -20,6 +22,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   late TextEditingController _phoneController;
   late TextEditingController _addressController;
   bool _isLoading = false;
+  AddressModel? _selectedAddress;
 
   @override
   void initState() {
@@ -30,7 +33,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _fullNameController = TextEditingController(text: user?.fullName ?? '');
     _emailController = TextEditingController(text: user?.email ?? '');
     _phoneController = TextEditingController(text: user?.phone ?? '');
-    _addressController = TextEditingController(text: user?.address ?? '');
+    _addressController = TextEditingController(text: user?.primaryAddress ?? '');
+    if (user != null && user.addresses.isNotEmpty) {
+       _selectedAddress = user.addresses.firstWhere((a) => a.isDefault, orElse: () => user.addresses.first);
+    }
   }
 
   @override
@@ -66,7 +72,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final success = await authProvider.updateProfile(
       fullName: _fullNameController.text,
       phone: _phoneController.text,
-      address: _addressController.text,
+      addresses: _selectedAddress != null ? [_selectedAddress!] : null,
       // Note: We are not updating email here as it requires re-authentication usually
       // If needed, we can add it to updateProfile logic later, 
       // but standard practice is separate flow for email change.
@@ -156,12 +162,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
               const SizedBox(height: 20),
 
               // Address Field
-              _buildTextField(
+              _buildAddressPickerField(
                 label: 'Delivery Address',
                 controller: _addressController,
                 icon: Icons.location_on_outlined,
-                hint: 'Enter your address',
-                maxLines: 3,
+                hint: 'Tap to select on map',
               ),
               const SizedBox(height: 30),
 
@@ -277,6 +282,63 @@ class _EditProfilePageState extends State<EditProfilePage> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             filled: _isLoading,
             fillColor: _isLoading ? Colors.grey.shade100 : Colors.white,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddressPickerField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+    required String hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1F3557),
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _isLoading ? null : () async {
+            final result = await Navigator.push<AddressModel>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MapAddressPickerPage(initialAddress: _selectedAddress),
+              ),
+            );
+            if (result != null) {
+              setState(() {
+                _selectedAddress = result.copyWith(isDefault: true);
+                _addressController.text = result.fullAddress;
+              });
+            }
+          },
+          child: IgnorePointer(
+            child: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: hint,
+                prefixIcon: Icon(icon, color: EditProfilePage.primaryOrange),
+                suffixIcon: const Icon(Icons.map, color: EditProfilePage.primaryOrange),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
           ),
         ),
       ],

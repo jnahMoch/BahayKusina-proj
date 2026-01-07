@@ -5,11 +5,11 @@ import '../providers/cart_provider.dart';
 import '../providers/orders_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/order.dart';
-import '../services/location_service.dart';
-import '../services/geocoding_service.dart';
 import '../services/notification_service.dart';
 import 'order_confirmation_page.dart';
+import 'address_selection_page.dart';
 import '../services/firestore_service.dart';
+import '../models/address_model.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -28,17 +28,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   late TextEditingController _contactController;
   late TextEditingController _instructionsController;
 
-  // Map-related state
-  GoogleMapController? _mapController;
-  LatLng? _selectedLocation;
-  final LocationService _locationService = LocationService();
-  final GeocodingService _geocodingService = GeocodingService();
-  bool _isLoadingLocation = false;
-  bool _isGeocodingAddress = false;
-  final Set<Marker> _markers = {};
-
   String _selectedPaymentMethod = 'Cash on Delivery';
-  String _addressLabel = 'Home'; // New field for marking address
+  AddressModel? _selectedAddress;
 
   final List<String> _paymentMethods = ['Cash on Delivery', 'GCash', 'PayMaya'];
 
@@ -54,91 +45,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
       text: user?.fullName ?? 'Juan Dela Cruz',
     );
     _addressController = TextEditingController(
-      text: user?.address ?? '123 Mabini St., Barangay San Juan, Manila',
+      text: user?.primaryAddress ?? '123 Mabini St., Barangay San Juan, Manila',
     );
     _contactController = TextEditingController(
       text: user?.phone ?? '+63 917 123 4567',
     );
     _instructionsController = TextEditingController();
 
-    // Initialize location after a short delay to allow map to be ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _geocodeAddress();
-    });
+    if (user != null && user.addresses.isNotEmpty) {
+      _selectedAddress = user.addresses.firstWhere((a) => a.isDefault, orElse: () => user.addresses.first);
+      _addressController.text = _selectedAddress?.fullAddress ?? '';
+    }
   }
 
-  void _updateMarker(LatLng position) {
-    setState(() {
-      _selectedLocation = position;
-      _markers.clear();
-      _markers.add(
-        Marker(
-          markerId: const MarkerId('delivery_location'),
-          position: position,
-          draggable: true,
-          onDragEnd: (newPosition) {
-            _reverseGeocode(newPosition);
-          },
-        ),
-      );
-    });
-
-    _mapController?.animateCamera(CameraUpdate.newLatLng(position));
-  }
-
-  Future<void> _geocodeAddress() async {
-    if (_addressController.text.isEmpty) return;
-
-    setState(() => _isGeocodingAddress = true);
-
-    final location = await _geocodingService.getCoordinatesFromAddress(
-      _addressController.text,
+  Future<void> _pickNewAddress() async {
+    final result = await Navigator.push<AddressModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AddressSelectionPage(),
+      ),
     );
 
-    if (location != null) {
-      _updateMarker(location);
+    if (result != null) {
+      setState(() {
+        _selectedAddress = result;
+        _addressController.text = result.fullAddress;
+      });
     }
-
-    setState(() => _isGeocodingAddress = false);
-  }
-
-  Future<void> _reverseGeocode(LatLng position) async {
-    setState(() => _isGeocodingAddress = true);
-
-    final address = await _geocodingService.getAddressFromCoordinates(position);
-
-    if (address != null) {
-      _addressController.text = address;
-    }
-
-    _updateMarker(position);
-    setState(() => _isGeocodingAddress = false);
-  }
-
-  Future<void> _getCurrentLocation() async {
-    setState(() => _isLoadingLocation = true);
-
-    final location = await _locationService.getCurrentLocation();
-
-    if (location != null) {
-      final address = await _geocodingService.getAddressFromCoordinates(
-        location,
-      );
-      if (address != null) {
-        _addressController.text = address;
-      }
-      _updateMarker(location);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not get current location. Please check permissions.',
-          ),
-        ),
-      );
-    }
-
-    setState(() => _isLoadingLocation = false);
   }
 
   @override
@@ -195,7 +128,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       paymentMethod: _selectedPaymentMethod,
       riderName: null,
       riderEta: null,
-      deliveryCoordinates: _selectedLocation,
+      deliveryCoordinates: _selectedAddress?.latitude != null ? LatLng(_selectedAddress!.latitude, _selectedAddress!.longitude) : null,
     );
 
     // Save to Firestore
@@ -228,7 +161,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           paymentMethod: _selectedPaymentMethod,
           estimatedDelivery: '30-45 minutes',
           cartItems: cartProvider.items,
-          deliveryCoordinates: _selectedLocation,
+          deliveryCoordinates: _selectedAddress?.latitude != null ? LatLng(_selectedAddress!.latitude, _selectedAddress!.longitude) : null,
         ),
       ),
     );
@@ -432,30 +365,65 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Widget _buildAddressField() {
+    final user = context.watch<AuthProvider>().currentUser;
+    final addresses = user?.addresses ?? [];
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (addresses.isNotEmpty) ...[
+          const Text(
+            'Choose from saved addresses:',
+            style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: addresses.map((addr) {
+                final isSelected = _selectedAddress?.id == addr.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(addr.label),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          _selectedAddress = addr;
+                          _addressController.text = addr.fullAddress;
+                        });
+                      }
+                    },
+                    selectedColor: primaryOrange.withOpacity(0.1),
+                    labelStyle: TextStyle(
+                      color: isSelected ? primaryOrange : Colors.black87,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _addressController,
           maxLines: 2,
-          onSubmitted: (_) => _geocodeAddress(),
+          readOnly: true,
+          onTap: _pickNewAddress,
           decoration: InputDecoration(
             filled: true,
-            fillColor: Colors.grey.shade100,
-            hintText: 'Enter your delivery address',
-            suffixIcon: IconButton(
-              icon: _isLoadingLocation
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location, color: primaryOrange),
-              onPressed: _isLoadingLocation ? null : _getCurrentLocation,
-              tooltip: 'Use current location',
-            ),
+            fillColor: Colors.grey.shade50,
+            hintText: 'Select delivery address',
+            suffixIcon: const Icon(Icons.map_outlined, color: primaryOrange),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade200),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -463,152 +431,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        _buildAddressLabels(),
-        const SizedBox(height: 12),
-        Container(
-          height: 220,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Stack(
-            children: [
-              GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: _selectedLocation ?? const LatLng(14.5995, 120.9842),
-                  zoom: 15,
-                ),
-                onMapCreated: (controller) => _mapController = controller,
-                markers: _markers,
-                onCameraIdle: () async {
-                  final latLng = await _mapController?.getVisibleRegion();
-                  if (latLng != null) {
-                    final center = LatLng(
-                      (latLng.northeast.latitude + latLng.southwest.latitude) /
-                          2,
-                      (latLng.northeast.longitude +
-                              latLng.southwest.longitude) /
-                          2,
-                    );
-                    _reverseGeocode(center);
-                  }
-                },
-                onTap: (position) => _reverseGeocode(position),
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
-                mapToolbarEnabled: false,
-              ),
-              // Center Pin Overlay
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: 35),
-                  child: Icon(
-                    Icons.location_on,
-                    color: primaryOrange,
-                    size: 40,
-                  ),
-                ),
-              ),
-              if (_isGeocodingAddress)
-                Container(
-                  color: Colors.black.withOpacity(0.1),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: primaryOrange),
-                  ),
-                ),
-              Positioned(
-                bottom: 12,
-                right: 12,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FloatingActionButton.small(
-                      heroTag: 'center_map',
-                      backgroundColor: Colors.white,
-                      child: const Icon(
-                        Icons.center_focus_strong,
-                        color: primaryOrange,
-                      ),
-                      onPressed: () {
-                        if (_selectedLocation != null) {
-                          _mapController?.animateCamera(
-                            CameraUpdate.newLatLng(_selectedLocation!),
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    FloatingActionButton.small(
-                      heroTag: 'confirm_pin',
-                      backgroundColor: primaryOrange,
-                      child: const Icon(Icons.check, color: Colors.white),
-                      onPressed: () async {
-                        final latLng = await _mapController?.getVisibleRegion();
-                        if (latLng != null) {
-                          final center = LatLng(
-                            (latLng.northeast.latitude +
-                                    latLng.southwest.latitude) /
-                                2,
-                            (latLng.northeast.longitude +
-                                    latLng.southwest.longitude) /
-                                2,
-                          );
-                          _reverseGeocode(center);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Text(
-            'Move map and tap checkmark to mark exact location',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-          ),
+        const SizedBox(height: 8),
+        Text(
+          'Tap the field to pick a precise location on the map',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
       ],
     );
   }
-
-  Widget _buildAddressLabels() {
-    final labels = ['Home', 'Office', 'Other'];
-    return Row(
-      children: labels.map((label) {
-        final isSelected = _addressLabel == label;
-        return Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: ChoiceChip(
-            label: Text(label),
-            selected: isSelected,
-            onSelected: (selected) {
-              if (selected) {
-                setState(() => _addressLabel = label);
-              }
-            },
-            selectedColor: primaryOrange.withOpacity(0.2),
-            labelStyle: TextStyle(
-              color: isSelected ? primaryOrange : Colors.black87,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-            backgroundColor: Colors.grey.shade100,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: isSelected ? primaryOrange : Colors.transparent,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildNameField() {
     return TextField(
       controller: _nameController,
@@ -753,9 +583,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Total',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+               Text(
+                _selectedAddress?.conciseAddress ?? 'Select delivery address',
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               Text(
                 '₱$total',

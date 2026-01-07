@@ -1,13 +1,16 @@
 // lib/screens/place_order_modal.dart
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/meal_package.dart';
 import '../models/order.dart';
+import 'order_confirmation_page.dart';
+import 'address_selection_page.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
-import 'order_confirmation_page.dart';
+import '../models/address_model.dart';
 
 class PlaceOrderModal extends StatefulWidget {
   final CartProvider cartProvider;
@@ -31,6 +34,7 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
   late TextEditingController _nameController;
   late TextEditingController _addressController;
   late TextEditingController _contactController;
+  AddressModel? _selectedAddress;
 
   String _selectedPaymentMethod = 'Cash on Delivery';
   int _quantity = 1;
@@ -47,11 +51,16 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
       text: user?.fullName ?? 'Juan Dela Cruz',
     );
     _addressController = TextEditingController(
-      text: user?.address ?? '123 Sampaguita St., Quezon City',
+      text: user?.primaryAddress ?? '123 Sampaguita St., Quezon City',
     );
     _contactController = TextEditingController(
       text: user?.phone ?? '0919-345-6789',
     );
+
+    if (user != null && user.addresses.isNotEmpty) {
+      _selectedAddress = user.addresses.firstWhere((a) => a.isDefault, orElse: () => user.addresses.first);
+      _addressController.text = _selectedAddress?.fullAddress ?? '';
+    }
   }
 
   @override
@@ -66,6 +75,22 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
     if (newQuantity >= 1 && newQuantity <= _maxQuantity) {
       setState(() {
         _quantity = newQuantity;
+      });
+    }
+  }
+
+  Future<void> _pickNewAddress() async {
+    final result = await Navigator.push<AddressModel>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AddressSelectionPage(),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedAddress = result;
+        _addressController.text = result.fullAddress;
       });
     }
   }
@@ -121,6 +146,7 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
         contactNumber: _contactController.text,
         paymentMethod: _selectedPaymentMethod,
         status: OrderStatus.pending,
+        deliveryCoordinates: _selectedAddress?.latitude != null ? LatLng(_selectedAddress!.latitude, _selectedAddress!.longitude) : null,
       );
 
       await firestoreService.createOrder(userId, order);
@@ -399,7 +425,7 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    _buildTextField(_addressController),
+                    _buildAddressPicker(),
                     const SizedBox(height: 14),
 
                     // Contact Number
@@ -487,6 +513,77 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAddressPicker() {
+    final user = context.watch<AuthProvider>().currentUser;
+    final addresses = user?.addresses ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (addresses.isNotEmpty) ...[
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: addresses.map((addr) {
+                final isSelected = _selectedAddress?.id == addr.id;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(addr.label),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          _selectedAddress = addr;
+                          _addressController.text = addr.fullAddress;
+                        });
+                      }
+                    },
+                    selectedColor: primaryOrange.withOpacity(0.1),
+                    labelStyle: TextStyle(
+                      color: isSelected ? primaryOrange : Colors.black87,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        TextField(
+          controller: _addressController,
+          maxLines: 2,
+          readOnly: true,
+          onTap: _pickNewAddress,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            hintText: 'Select delivery address',
+            suffixIcon: const Icon(Icons.map_outlined, color: primaryOrange),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: primaryOrange),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+          ),
+          style: const TextStyle(fontSize: 14),
+        ),
+      ],
     );
   }
 
