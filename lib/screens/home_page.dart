@@ -274,12 +274,11 @@ class _HomePageState extends State<HomePage> {
       children: [
         Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+            ClipOval(
               child: Image.asset(
                 'assets/images/bahay_kusina_logo.png',
-                width: 40,
-                height: 40,
+                width: 45,
+                height: 45,
                 fit: BoxFit.cover,
               ),
             ),

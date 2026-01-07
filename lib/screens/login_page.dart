@@ -49,10 +49,8 @@ class _LoginPageState extends State<LoginPage> {
 
   void _validateInputs() {
     setState(() {
-      _emailError = ValidationUtils.validateEmail(_emailController.text);
-      _passwordError = ValidationUtils.validatePassword(
-        _passwordController.text,
-      );
+      _emailError = _emailController.text.isEmpty ? 'Email is required' : ValidationUtils.validateEmail(_emailController.text);
+      _passwordError = _passwordController.text.isEmpty ? 'Password is required' : null;
     });
   }
 
@@ -130,14 +128,16 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 12),
                   _buildUserToggle(),
                   const SizedBox(height: 25),
-                  _buildLabel("Email or Phone"),
+                  _buildLabel("Email Address"),
                   const SizedBox(height: 8),
                   AuthTextField(
-                    hint: "juan@example.com or 09171234567",
+                    hint: "juan@example.com",
                     controller: _emailController,
                     errorText: _emailError,
-                    onChanged: (_) {
-                      setState(() => _emailError = null);
+                    onChanged: (val) {
+                      setState(() {
+                        _emailError = val.isEmpty ? 'Email is required' : ValidationUtils.validateEmail(val);
+                      });
                     },
                   ),
                   const SizedBox(height: 20),
@@ -149,11 +149,11 @@ class _LoginPageState extends State<LoginPage> {
                     isPassword: true,
                     obscureText: !_isPasswordVisible,
                     errorText: _passwordError,
-                    onToggleVisibility: () => setState(
-                      () => _isPasswordVisible = !_isPasswordVisible,
-                    ),
-                    onChanged: (_) {
-                      setState(() => _passwordError = null);
+                    onToggleVisibility: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                    onChanged: (val) {
+                      setState(() {
+                        _passwordError = val.isEmpty ? 'Password is required' : null;
+                      });
                     },
                   ),
                   _buildForgotPasswordButton(),

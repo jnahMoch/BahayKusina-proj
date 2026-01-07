@@ -21,6 +21,40 @@ class _SignUpPageState extends State<SignUpPage> {
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
   bool _isLoading = false;
+  
+  // Field error states
+  bool _nameError = false;
+  bool _emailError = false;
+  bool _phoneError = false;
+  bool _addressError = false;
+  bool _passwordError = false;
+  bool _confirmPasswordError = false;
+
+  // Password strength states
+  bool _hasMinLength = false;
+  bool _hasUppercase = false;
+  bool _hasLowercase = false;
+  bool _hasNumber = false;
+  bool _hasSpecialChar = false;
+
+  void _validatePassword(String value) {
+    setState(() {
+      _hasMinLength = value.length >= 8;
+      _hasUppercase = value.contains(RegExp(r'[A-Z]'));
+      _hasLowercase = value.contains(RegExp(r'[a-z]'));
+      _hasNumber = value.contains(RegExp(r'[0-9]'));
+      _hasSpecialChar = value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+      _passwordError = value.isEmpty;
+    });
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  bool _isValidPhone(String phone) {
+    return RegExp(r'^(09|\+639)\d{9}$').hasMatch(phone);
+  }
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailPhoneController = TextEditingController();
@@ -42,14 +76,28 @@ class _SignUpPageState extends State<SignUpPage> {
   }
 
   void _handleSignUp() async {
-    if (_nameController.text.isEmpty ||
-        _emailPhoneController.text.isEmpty ||
-        _phoneController.text.isEmpty ||
-        _addressController.text.isEmpty ||
-        _passwordController.text.isEmpty ||
-        _confirmPasswordController.text.isEmpty) {
+    final name = _nameController.text;
+    final email = _emailPhoneController.text;
+    final phone = _phoneController.text;
+    final address = _addressController.text;
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    setState(() {
+      _nameError = name.isEmpty;
+      _emailError = email.isEmpty || !_isValidEmail(email);
+      _phoneError = phone.isEmpty || !_isValidPhone(phone);
+      _addressError = address.isEmpty;
+      _passwordError = password.isEmpty || !_hasMinLength || !_hasUppercase || !_hasLowercase || !_hasNumber;
+      _confirmPasswordError = confirmPassword.isEmpty || confirmPassword != password;
+    });
+
+    if (_nameError || _emailError || _phoneError || _addressError || _passwordError || _confirmPasswordError) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        const SnackBar(
+          content: Text('Please correct the errors in the form'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -71,11 +119,11 @@ class _SignUpPageState extends State<SignUpPage> {
           : UserRole.vendor;
 
       final success = await authProvider.signup(
-        fullName: _nameController.text,
-        email: _emailPhoneController.text,
-        phone: _phoneController.text,
-        address: _addressController.text,
-        password: _passwordController.text,
+        fullName: name,
+        email: email,
+        phone: phone,
+        address: address,
+        password: password,
         role: role,
       );
 
@@ -139,6 +187,8 @@ class _SignUpPageState extends State<SignUpPage> {
                           ? "Your business name or personal name" 
                           : "Juan Dela Cruz",
                       keyboardType: TextInputType.name,
+                      hasError: _nameError,
+                      onChanged: (val) => setState(() => _nameError = val.isEmpty),
                     ),
                     const SizedBox(height: 20),
                     _buildLabel("Email"),
@@ -146,6 +196,8 @@ class _SignUpPageState extends State<SignUpPage> {
                       controller: _emailPhoneController,
                       hint: "juan@example.com",
                       keyboardType: TextInputType.emailAddress,
+                      hasError: _emailError,
+                      onChanged: (val) => setState(() => _emailError = val.isEmpty || !_isValidEmail(val)),
                     ),
                     const SizedBox(height: 20),
                     _buildLabel("Phone Number"),
@@ -153,6 +205,8 @@ class _SignUpPageState extends State<SignUpPage> {
                       controller: _phoneController,
                       hint: "09171234567",
                       keyboardType: TextInputType.phone,
+                      hasError: _phoneError,
+                      onChanged: (val) => setState(() => _phoneError = val.isEmpty || !_isValidPhone(val)),
                     ),
                     const SizedBox(height: 20),
                     _buildLabel(selectedRole == "Sell Food" ? "Business Address" : "Delivery Address"),
@@ -160,6 +214,8 @@ class _SignUpPageState extends State<SignUpPage> {
                       controller: _addressController,
                       hint: "123 Mabini St., Barangay San Juan, Manila",
                       keyboardType: TextInputType.streetAddress,
+                      hasError: _addressError,
+                      onChanged: (val) => setState(() => _addressError = val.isEmpty),
                     ),
                     const SizedBox(height: 20),
                     _buildLabel("Password"),
@@ -168,19 +224,22 @@ class _SignUpPageState extends State<SignUpPage> {
                       hint: "At least 8 characters",
                       isPassword: true,
                       obscureText: obscurePassword,
-                      onToggleVisibility: () =>
-                          setState(() => obscurePassword = !obscurePassword),
+                      onToggleVisibility: () => setState(() => obscurePassword = !obscurePassword),
+                      hasError: _passwordError,
+                      onChanged: _validatePassword,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 10),
+                    _buildPasswordStrength(),
+                    const SizedBox(height: 10),
                     _buildLabel("Confirm Password"),
                     SignupTextField(
                       controller: _confirmPasswordController,
                       hint: "Re-enter your password",
                       isPassword: true,
                       obscureText: obscureConfirmPassword,
-                      onToggleVisibility: () => setState(
-                        () => obscureConfirmPassword = !obscureConfirmPassword,
-                      ),
+                      onToggleVisibility: () => setState(() => obscureConfirmPassword = !obscureConfirmPassword),
+                      hasError: _confirmPasswordError,
+                      onChanged: (val) => setState(() => _confirmPasswordError = val.isEmpty || val != _passwordController.text),
                     ),
                     const SizedBox(height: 30),
                     _buildTermsAndConditions(),
@@ -241,6 +300,42 @@ class _SignUpPageState extends State<SignUpPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordStrength() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildStrengthItem("At least 8 characters", _hasMinLength),
+        _buildStrengthItem("Uppercase letter", _hasUppercase),
+        _buildStrengthItem("Lowercase letter", _hasLowercase),
+        _buildStrengthItem("Contains a number", _hasNumber),
+        _buildStrengthItem("Special character (Optional)", _hasSpecialChar),
+      ],
+    );
+  }
+
+  Widget _buildStrengthItem(String text, bool isMet) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(
+            isMet ? Icons.check_circle : Icons.circle_outlined,
+            size: 14,
+            color: isMet ? Colors.green : Colors.grey,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: isMet ? Colors.green : Colors.black54,
+            ),
+          ),
+        ],
       ),
     );
   }

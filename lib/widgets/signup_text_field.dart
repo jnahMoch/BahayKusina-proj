@@ -8,6 +8,8 @@ class SignupTextField extends StatelessWidget {
   final bool isPassword;
   final bool obscureText;
   final VoidCallback? onToggleVisibility;
+  final bool hasError;
+  final ValueChanged<String>? onChanged;
 
   const SignupTextField({
     super.key,
@@ -17,6 +19,8 @@ class SignupTextField extends StatelessWidget {
     this.isPassword = false,
     this.obscureText = false,
     this.onToggleVisibility,
+    this.hasError = false,
+    this.onChanged,
   });
 
   @override
@@ -25,11 +29,12 @@ class SignupTextField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: Colors.grey),
         filled: true,
-        fillColor: AppColors.inputFillColor, // Matches the light grey background
+        fillColor: AppColors.inputFillColor,
         contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 15),
         suffixIcon: isPassword
             ? IconButton(
@@ -41,8 +46,22 @@ class SignupTextField extends StatelessWidget {
               )
             : null,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), // Matches rounded corners
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: hasError ? Colors.red : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(
+            color: hasError ? Colors.red : AppColors.primaryOrange,
+            width: 1.5,
+          ),
         ),
       ),
     );

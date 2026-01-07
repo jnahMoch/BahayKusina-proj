@@ -9,15 +9,16 @@ import 'providers/cart_provider.dart';
 import 'providers/orders_provider.dart';
 import 'providers/vendor_provider.dart';
 import 'services/notification_service.dart';
+import 'models/auth_user.dart';
 import 'screens/home_page.dart';
 import 'screens/vendor_home_page.dart';
-import 'models/auth_user.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final authProvider = AuthProvider();
+  await authProvider.checkAuthStatus(); // Check if user is already logged in
 
   runApp(BahayKusinaApp(authProvider: authProvider));
 }
