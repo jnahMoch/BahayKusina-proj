@@ -37,25 +37,51 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void initState() {
     super.initState();
     
+    // Initialize controllers first
+    _nameController = TextEditingController();
+    _addressController = TextEditingController();
+    _contactController = TextEditingController();
+    _instructionsController = TextEditingController();
+    
+    // Load user data
+    _loadUserData();
+  }
+  
+  void _loadUserData() {
     // Load user data from AuthProvider
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.currentUser;
     
-    _nameController = TextEditingController(
-      text: user?.fullName ?? 'Juan Dela Cruz',
-    );
-    _addressController = TextEditingController(
-      text: user?.primaryAddress ?? '123 Mabini St., Barangay San Juan, Manila',
-    );
-    _contactController = TextEditingController(
-      text: user?.phone ?? '+63 917 123 4567',
-    );
-    _instructionsController = TextEditingController();
-
-    if (user != null && user.addresses.isNotEmpty) {
-      _selectedAddress = user.addresses.firstWhere((a) => a.isDefault, orElse: () => user.addresses.first);
-      _addressController.text = _selectedAddress?.conciseAddress ?? '';
+    print('CheckoutPage - Loading user data: ${user?.fullName}, Phone: ${user?.phone}, Addresses: ${user?.addresses.length}');
+    
+    if (user != null) {
+      _nameController.text = user.fullName.isNotEmpty ? user.fullName : 'Juan Dela Cruz';
+      _contactController.text = user.phone.isNotEmpty ? user.phone : '+63 917 123 4567';
+      
+      if (user.addresses.isNotEmpty) {
+        _selectedAddress = user.addresses.firstWhere(
+          (a) => a.isDefault, 
+          orElse: () => user.addresses.first,
+        );
+        _addressController.text = _selectedAddress?.conciseAddress ?? '123 Mabini St., Barangay San Juan, Manila';
+        print('CheckoutPage - Loaded address: ${_selectedAddress?.conciseAddress}');
+      } else {
+        _addressController.text = '123 Mabini St., Barangay San Juan, Manila';
+        print('CheckoutPage - No addresses found, using default');
+      }
+    } else {
+      _nameController.text = 'Juan Dela Cruz';
+      _addressController.text = '123 Mabini St., Barangay San Juan, Manila';
+      _contactController.text = '+63 917 123 4567';
+      print('CheckoutPage - No user found, using defaults');
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // When AuthProvider updates (e.g., after login), reload user data
+    _loadUserData();
   }
 
   Future<void> _pickNewAddress() async {
@@ -74,6 +100,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
+  bool _isPlacingOrder = false;
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -84,13 +112,32 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _placeOrder() async {
+    if (_isPlacingOrder) return; // Prevent double tap
+    
     final cartProvider = context.read<CartProvider>();
+    
+    // Check if cart is empty
+    if (cartProvider.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your cart is empty')),
+      );
+      return;
+    }
+    
     if (_nameController.text.isEmpty || _addressController.text.isEmpty || _contactController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all delivery details')),
       );
       return;
     }
+    
+    setState(() => _isPlacingOrder = true);
+    
+    print('=== PLACING ORDER ===');
+    print('Cart items: ${cartProvider.items.length}');
+    print('Name: ${_nameController.text}');
+    print('Address: ${_addressController.text}');
+    print('Contact: ${_contactController.text}');
 
     // Generate order ID
     final orderId =
@@ -131,22 +178,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
       deliveryCoordinates: _selectedAddress?.latitude != null ? LatLng(_selectedAddress!.latitude, _selectedAddress!.longitude) : null,
     );
 
-    // Save to Firestore
+    // Save to Firestore (continue even if offline)
+    bool savedToFirestore = false;
     if (user != null) {
       try {
         await FirestoreService().createOrder(user.userId, order);
         print('Order saved to Firestore: $orderId');
+        savedToFirestore = true;
       } catch (e) {
-        print('Error saving order: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save order: $e')),
-        );
-        return;
+        print('Error saving order to Firestore (continuing anyway): $e');
+        // Don't block - continue with order locally
+        // It will sync when back online if using Firestore persistence
       }
+    } else {
+      print('WARNING: No user logged in, order not saved to Firestore');
     }
 
-    // Add order to OrdersProvider
-    OrdersProvider().addOrder(order);
+    // Add order to OrdersProvider (use the singleton)
+    context.read<OrdersProvider>().addOrder(order);
+    print('Order added to OrdersProvider');
 
     // Trigger Notification
     NotificationService().addNotification(
@@ -160,22 +210,51 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
     );
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => OrderConfirmationPage(
-          orderId: orderId,
-          totalAmount: cartProvider.totalPrice + 50,
-          deliveryAddress: _addressController.text,
-          paymentMethod: _selectedPaymentMethod,
-          estimatedDelivery: '30-45 minutes',
-          cartItems: cartProvider.items,
-          deliveryCoordinates: _selectedAddress?.latitude != null ? LatLng(_selectedAddress!.latitude, _selectedAddress!.longitude) : null,
-        ),
-      ),
-    );
+    // Save cart items before clearing for confirmation page
+    final savedCartItems = List.from(cartProvider.items);
+    final savedTotal = cartProvider.totalPrice + 50;
+    final savedAddress = _addressController.text;
+    final savedPayment = _selectedPaymentMethod;
+    final savedCoords = _selectedAddress?.latitude != null 
+        ? LatLng(_selectedAddress!.latitude, _selectedAddress!.longitude) 
+        : null;
 
+    // Clear cart first
     cartProvider.clearCart();
+    
+    print('=== ORDER PLACED SUCCESSFULLY ===');
+
+    // Reset the loading state
+    if (mounted) {
+      setState(() => _isPlacingOrder = false);
+    }
+
+    if (mounted) {
+      // Show warning if not saved to cloud (offline)
+      if (!savedToFirestore) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Order placed! (Will sync when online)'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OrderConfirmationPage(
+            orderId: orderId,
+            totalAmount: savedTotal,
+            deliveryAddress: savedAddress,
+            paymentMethod: savedPayment,
+            estimatedDelivery: '30-45 minutes',
+            cartItems: savedCartItems.cast(),
+            deliveryCoordinates: savedCoords,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -248,21 +327,45 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: _placeOrder,
+                  onPressed: _isPlacingOrder ? null : _placeOrder,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryOrange,
+                    disabledBackgroundColor: primaryOrange.withOpacity(0.6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: Text(
-                    'Place Order - ₱$total',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isPlacingOrder
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Placing Order...',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          'Place Order - ₱$total',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ],

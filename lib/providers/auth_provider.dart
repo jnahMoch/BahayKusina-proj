@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +28,7 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
 
   static const String _roleKey = 'user_role';
+  static const String _profileKey = 'cached_user_profile';
 
   // Getters
   AuthUser? get currentUser => _currentUser;
@@ -38,6 +40,8 @@ class AuthProvider extends ChangeNotifier {
 
   /// Helper to convert Firestore data and Firebase User to AuthUser
   AuthUser _createUser(firebase_auth.User user, Map<String, dynamic>? profile) {
+    AppLogger.info('_createUser called - User: ${user.email}, Profile keys: ${profile?.keys.toList()}');
+    
     final roleStr =
         profile?['role']?.toString().toLowerCase().trim() ?? 'customer';
     final role = roleStr == 'vendor' ? UserRole.vendor : UserRole.customer;
@@ -50,10 +54,12 @@ class AuthProvider extends ChangeNotifier {
 
     var addressList = <AddressModel>[];
     if (profile?['addresses'] != null) {
-      addressList = (profile!['addresses'] as List)
+      AppLogger.info('Found addresses in profile: ${(profile!['addresses'] as List).length}');
+      addressList = (profile['addresses'] as List)
           .map((a) => AddressModel.fromJson(a as Map<String, dynamic>))
           .toList();
     } else if (profile?['address'] != null && profile!['address'] is String) {
+      AppLogger.info('Found legacy string address, converting to AddressModel');
       addressList.add(AddressModel(
         id: 'default',
         label: 'Default',
@@ -69,17 +75,33 @@ class AuthProvider extends ChangeNotifier {
         longitude: 0.0,
         isDefault: true,
       ));
+    } else {
+      AppLogger.warning('No addresses found in profile for ${user.email}');
     }
+    
+    final phoneNumber = profile?['phone']?.toString() ?? '';
+    AppLogger.info('Creating AuthUser - Phone: $phoneNumber, Addresses: ${addressList.length}');
 
-    return AuthUser(
+    final authUser = AuthUser(
       userId: user.uid,
       email: user.email ?? profile?['email'] ?? '',
       fullName: profile?['displayName'] ?? user.displayName ?? 'User',
-      phone: profile?['phone'] ?? '',
+      phone: phoneNumber,
       addresses: addressList,
       role: role,
       createdAt: user.metadata.creationTime ?? DateTime.now(),
     );
+
+    // Cache the profile for offline/fast fallback
+    _cacheProfile({
+      'email': authUser.email,
+      'displayName': authUser.fullName,
+      'phone': authUser.phone,
+      'role': roleStr,
+      'addresses': addressList.map((a) => a.toJson()).toList(),
+    });
+
+    return authUser;
   }
 
   Future<void> _cacheRole(String role) async {
@@ -89,6 +111,56 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       AppLogger.error('Error caching role: $e');
     }
+  }
+
+  Future<void> _cacheProfile(Map<String, dynamic> profile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_profileKey, jsonEncode(profile));
+      AppLogger.info('Profile cached locally');
+    } catch (e) {
+      AppLogger.error('Error caching profile: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> _getCachedProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_profileKey);
+      if (raw == null) return null;
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      AppLogger.info('Loaded cached profile from local storage');
+      return map;
+    } catch (e) {
+      AppLogger.error('Error reading cached profile: $e');
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> _mergeWithCachedProfile(
+    Map<String, dynamic> profile,
+  ) async {
+    final cached = await _getCachedProfile();
+    if (cached == null) return profile;
+
+    final merged = Map<String, dynamic>.from(profile);
+    final phone = (merged['phone'] ?? '').toString();
+    final cachedPhone = (cached['phone'] ?? '').toString();
+    if (phone.isEmpty && cachedPhone.isNotEmpty) {
+      merged['phone'] = cachedPhone;
+      AppLogger.info('Merged phone from cache');
+    }
+
+    final mergedAddresses = merged['addresses'];
+    final cachedAddresses = cached['addresses'];
+    if (mergedAddresses is List && cachedAddresses is List) {
+      if (mergedAddresses.isEmpty && cachedAddresses.isNotEmpty) {
+        merged['addresses'] = cachedAddresses;
+        AppLogger.info('Merged addresses from cache');
+      }
+    }
+
+    return merged;
   }
 
   Future<String?> _getCachedRole() async {
@@ -130,10 +202,14 @@ class AuthProvider extends ChangeNotifier {
         try {
           profile = await FirestoreService()
               .getUserProfile(userCredential.user!.uid)
-              .timeout(const Duration(seconds: 5));
+              .timeout(const Duration(seconds: 10));
+          
+          if (profile != null) {
+            AppLogger.info('Login: Profile loaded successfully with ${(profile['addresses'] as List?)?.length ?? 0} addresses');
+          }
         } catch (e) {
           AppLogger.warning(
-            'Firestore profile fetch timed out/failed during login. Using role selection/cache.',
+            'Firestore profile fetch timed out/failed during login. Using role selection/cache: $e',
           );
         }
 
@@ -145,8 +221,22 @@ class AuthProvider extends ChangeNotifier {
           _currentUser = _createUser(userCredential.user!, {
             'role': fallbackRole,
           });
+          AppLogger.warning('Login: Using cached/default profile');
         } else {
-          _currentUser = _createUser(userCredential.user!, profile);
+          final mergedProfile = await _mergeWithCachedProfile(profile);
+          _currentUser = _createUser(userCredential.user!, mergedProfile);
+          AppLogger.info('Login: Using Firestore profile data');
+        }
+
+        // Cache profile data for faster subsequent loads
+        if (_currentUser != null) {
+          await _cacheProfile({
+            'email': _currentUser!.email,
+            'displayName': _currentUser!.fullName,
+            'phone': _currentUser!.phone,
+            'role': _currentUser!.role.toString().split('.').last,
+            'addresses': _currentUser!.addresses.map((a) => a.toJson()).toList(),
+          });
         }
 
         AppLogger.info(
@@ -198,6 +288,8 @@ class AuthProvider extends ChangeNotifier {
       if (userCredential.user != null) {
         // Create profile in Firestore with a timeout so we don't hang the UI forever
         try {
+          AppLogger.info('Creating user profile - Name: $fullName, Phone: $phone, Addresses: ${addresses.length}');
+          
           await Future.wait([
             userCredential.user!.updateDisplayName(fullName),
             FirestoreService().createUserProfile(
@@ -209,9 +301,11 @@ class AuthProvider extends ChangeNotifier {
               role: role.toString().split('.').last,
             ),
           ]).timeout(const Duration(seconds: 10));
+          
+          AppLogger.info('User profile created successfully in Firestore');
         } catch (e) {
           AppLogger.warning(
-            'Firestore profile creation failed or timed out. User created but profile might be missing.',
+            'Firestore profile creation failed or timed out: $e',
           );
         }
 
@@ -222,6 +316,17 @@ class AuthProvider extends ChangeNotifier {
           'phone': phone,
           'addresses': addresses.map((a) => a.toJson()).toList(),
           'role': role.toString().split('.').last,
+        });
+        
+        AppLogger.info('Current user set - Phone: ${_currentUser?.phone}, Addresses: ${_currentUser?.addresses.length}');
+
+        // Cache profile
+        await _cacheProfile({
+          'email': _currentUser!.email,
+          'displayName': _currentUser!.fullName,
+          'phone': _currentUser!.phone,
+          'role': _currentUser!.role.toString().split('.').last,
+          'addresses': _currentUser!.addresses.map((a) => a.toJson()).toList(),
         });
 
         _isLoading = false;
@@ -253,6 +358,7 @@ class AuthProvider extends ChangeNotifier {
       // Clear cache on logout
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_roleKey);
+      // Preserve cached profile to assist re-login if Firestore is slow/missing
     } catch (e, stackTrace) {
       _errorMessage = 'Logout failed: $e';
       AppLogger.error('Logout error: $e\n$stackTrace');
@@ -352,35 +458,66 @@ class AuthProvider extends ChangeNotifier {
 
   /// Check authentication status
   Future<void> checkAuthStatus() async {
+    _isLoading = true;
+    notifyListeners();
+    
     _firebaseAuth.authStateChanges().listen((firebase_auth.User? user) async {
       if (user != null) {
         Map<String, dynamic>? profile;
         try {
           profile = await FirestoreService()
               .getUserProfile(user.uid)
-              .timeout(const Duration(seconds: 5));
+              .timeout(const Duration(seconds: 10));
+          
+          if (profile != null) {
+            AppLogger.info('Profile loaded from Firestore: ${profile['displayName']}');
+          }
         } catch (e) {
           AppLogger.warning(
-            'Background auth check Firestore fetch timed out/failed.',
+            'Background auth check Firestore fetch timed out/failed: $e',
           );
         }
 
         if (profile == null) {
           final cachedRole = await _getCachedRole();
-          _currentUser = _createUser(
-            user,
-            cachedRole != null ? {'role': cachedRole} : null,
-          );
+          final cachedProfile = await _getCachedProfile();
+
+          if (cachedProfile != null) {
+            AppLogger.warning('Using cached profile for ${user.email}');
+            _currentUser = _createUser(
+              user,
+              {
+                'role': cachedRole ?? cachedProfile['role'] ?? 'customer',
+                'email': cachedProfile['email'] ?? user.email,
+                'displayName': cachedProfile['displayName'] ?? user.displayName,
+                'phone': cachedProfile['phone'] ?? '',
+                'addresses': cachedProfile['addresses'] is List
+                    ? cachedProfile['addresses']
+                    : [],
+              },
+            );
+          } else {
+            _currentUser = _createUser(
+              user,
+              cachedRole != null ? {'role': cachedRole} : null,
+            );
+            AppLogger.warning('Using cached/default role only for ${user.email}');
+          }
         } else {
-          _currentUser = _createUser(user, profile);
+          final mergedProfile = await _mergeWithCachedProfile(profile);
+          _currentUser = _createUser(user, mergedProfile);
+          AppLogger.info('Profile fully loaded from Firestore (merged with cache if needed)');
         }
 
         AppLogger.info(
-          'Auth status updated: ${user.email} (Role: ${_currentUser?.role})',
+          'Auth status updated: ${user.email} (Role: ${_currentUser?.role}, Addresses: ${_currentUser?.addresses.length})',
         );
       } else {
         _currentUser = null;
+        AppLogger.info('User logged out');
       }
+      
+      _isLoading = false;
       notifyListeners();
     });
   }
@@ -388,6 +525,50 @@ class AuthProvider extends ChangeNotifier {
   /// Clear error message
   void clearError() {
     _errorMessage = null;
+    notifyListeners();
+  }
+
+  /// Force refresh the profile from Firestore (used when data looks missing)
+  Future<void> refreshUserProfile() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      AppLogger.warning('refreshUserProfile called but no firebase user');
+      return;
+    }
+
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      final profile = await FirestoreService()
+          .getUserProfile(user.uid)
+          .timeout(const Duration(seconds: 10));
+
+      if (profile != null) {
+        final mergedProfile = await _mergeWithCachedProfile(profile);
+        _currentUser = _createUser(user, mergedProfile);
+        AppLogger.info('Profile refreshed from Firestore for ${user.email}');
+      } else {
+        // fallback to cached profile if available
+        final cached = await _getCachedProfile();
+        if (cached != null) {
+          _currentUser = _createUser(user, {
+            'role': cached['role'] ?? 'customer',
+            'email': cached['email'] ?? user.email,
+            'displayName': cached['displayName'] ?? user.displayName,
+            'phone': cached['phone'] ?? '',
+            'addresses': cached['addresses'] is List ? cached['addresses'] : [],
+          });
+          AppLogger.warning('refreshUserProfile: Using cached profile for ${user.email}');
+        } else {
+          AppLogger.warning('refreshUserProfile: No profile found for ${user.email}');
+        }
+      }
+    } catch (e, stackTrace) {
+      AppLogger.error('refreshUserProfile error: $e\n$stackTrace');
+    }
+
+    _isLoading = false;
     notifyListeners();
   }
 }

@@ -19,7 +19,9 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   final authProvider = AuthProvider();
-  await authProvider.checkAuthStatus(); // Check if user is already logged in
+  // Auth state will be monitored by the authStateChanges listener
+  // No need to await here as it sets up a listener
+  authProvider.checkAuthStatus();
 
   runApp(BahayKusinaApp(authProvider: authProvider));
 }

@@ -316,7 +316,10 @@ class FirestoreService {
     required String role,
   }) async {
     try {
-      await _db.collection('users').doc(userId).set({
+      AppLogger.info('FirestoreService.createUserProfile - Creating profile for: $email');
+      AppLogger.info('Phone: $phone, Addresses count: ${addresses.length}, Role: $role');
+      
+      final profileData = {
         'email': email,
         'displayName': displayName,
         'phone': phone,
@@ -324,7 +327,10 @@ class FirestoreService {
         'role': role,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+      
+      await _db.collection('users').doc(userId).set(profileData);
+      AppLogger.info('Profile created successfully in Firestore for user: $userId');
     } catch (e) {
       AppLogger.error('Error creating user profile: $e');
       rethrow;
@@ -333,9 +339,15 @@ class FirestoreService {
 
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
     try {
+      AppLogger.info('FirestoreService.getUserProfile - Fetching profile for: $userId');
+      
       final doc = await _db.collection('users').doc(userId).get();
       if (doc.exists) {
-        return doc.data();
+        final data = doc.data();
+        AppLogger.info('Profile found - Phone: ${data?['phone']}, Addresses: ${(data?['addresses'] as List?)?.length ?? 0}');
+        return data;
+      } else {
+        AppLogger.warning('No profile found in Firestore for user: $userId');
       }
     } catch (e) {
       AppLogger.error('Error fetching user profile: $e');

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import '../models/address_model.dart';
 import '../services/geocoding_service.dart';
 import '../services/location_service.dart';
 import '../theme/app_colors.dart';
+import '../providers/auth_provider.dart';
 
 class MapAddressPickerPage extends StatefulWidget {
   final AddressModel? initialAddress;
@@ -15,7 +19,7 @@ class MapAddressPickerPage extends StatefulWidget {
 }
 
 class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
-  GoogleMapController? _mapController;
+  final MapController _mapController = MapController();
   LatLng _currentPosition = const LatLng(7.0736, 125.6128); // Default to Davao City
   bool _isLoading = false;
   
@@ -34,34 +38,51 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
   void initState() {
     super.initState();
     if (widget.initialAddress != null) {
-      _currentPosition = widget.initialAddress!.coordinates;
+      _currentPosition = LatLng(
+        widget.initialAddress!.latitude,
+        widget.initialAddress!.longitude,
+      );
       _labelController.text = widget.initialAddress!.label;
-      _fullNameController.text = widget.initialAddress!.fullName;
       _provinceController.text = widget.initialAddress!.province;
       _cityController.text = widget.initialAddress!.city;
       _barangayController.text = widget.initialAddress!.barangay;
       _streetController.text = widget.initialAddress!.streetAddress;
       _postalController.text = widget.initialAddress!.postalCode;
     } else {
-      _getCurrentLocation();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _getCurrentLocation();
+      });
     }
+
+    // Auto-fill full name from current user if available (field not shown)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
+        if (user != null && user.fullName.isNotEmpty) {
+          _fullNameController.text = user.fullName;
+        }
+      } catch (_) {}
+    });
   }
 
   Future<void> _getCurrentLocation() async {
     setState(() => _isLoading = true);
     final pos = await _locationService.getCurrentLocation();
-    if (pos != null) {
-      _currentPosition = pos;
-      _mapController?.animateCamera(CameraUpdate.newLatLng(pos));
-      await _reverseGeocode(pos);
+    if (pos != null && mounted) {
+      final newPos = LatLng(pos.latitude, pos.longitude);
+      setState(() => _currentPosition = newPos);
+      _mapController.move(newPos, 17);
+      await _reverseGeocode(newPos);
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _reverseGeocode(LatLng pos) async {
     setState(() => _isLoading = true);
-    final placemark = await _geocodingService.getPlaceMarkFromCoordinates(pos);
-    if (placemark != null) {
+    // Convert to google_maps LatLng for the geocoding service
+    final googleLatLng = gmaps.LatLng(pos.latitude, pos.longitude);
+    final placemark = await _geocodingService.getPlaceMarkFromCoordinates(googleLatLng);
+    if (placemark != null && mounted) {
       setState(() {
         _provinceController.text = placemark.administrativeArea ?? '';
         _cityController.text = placemark.locality ?? '';
@@ -70,7 +91,12 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
         _postalController.text = placemark.postalCode ?? '';
       });
     }
-    setState(() => _isLoading = false);
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  void _onMapTap(TapPosition tapPosition, LatLng point) {
+    setState(() => _currentPosition = point);
+    _reverseGeocode(point);
   }
 
   @override
@@ -79,6 +105,7 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
       appBar: AppBar(
         title: const Text('Set Delivery Address'),
         backgroundColor: AppColors.primaryOrange,
+        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
@@ -86,30 +113,34 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
             flex: 2,
             child: Stack(
               children: [
-                GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: _currentPosition,
-                    zoom: 15,
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _currentPosition,
+                    initialZoom: 17,
+                    onTap: _onMapTap,
                   ),
-                  onMapCreated: (controller) => _mapController = controller,
-                  onCameraIdle: () {
-                    // Update location and reverse geocode when user stops moving map
-                  },
-                  onTap: (pos) {
-                    setState(() => _currentPosition = pos);
-                    _reverseGeocode(pos);
-                  },
-                  markers: {
-                    Marker(
-                      markerId: const MarkerId('selected'),
-                      position: _currentPosition,
-                      draggable: true,
-                      onDragEnd: (pos) {
-                        setState(() => _currentPosition = pos);
-                        _reverseGeocode(pos);
-                      },
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.bahaykusina.app',
+                      maxZoom: 19,
                     ),
-                  },
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _currentPosition,
+                          width: 50,
+                          height: 50,
+                          child: const Icon(
+                            Icons.location_pin,
+                            color: AppColors.primaryOrange,
+                            size: 50,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
                 Positioned(
                   top: 16,
@@ -121,8 +152,11 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
                   ),
                 ),
                 if (_isLoading)
-                  const Center(
-                    child: CircularProgressIndicator(color: AppColors.primaryOrange),
+                  Container(
+                    color: Colors.black26,
+                    child: const Center(
+                      child: CircularProgressIndicator(color: AppColors.primaryOrange),
+                    ),
                   ),
                 Positioned(
                   bottom: 16,
@@ -144,13 +178,29 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Selected Location',
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'OpenStreetMap',
+                                style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Tap map to select location',
+                              style: TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         Text(
-                          '${_currentPosition.latitude.toStringAsFixed(6)}, ${_currentPosition.longitude.toStringAsFixed(6)}',
+                          '📍 ${_currentPosition.latitude.toStringAsFixed(6)}, ${_currentPosition.longitude.toStringAsFixed(6)}',
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primaryOrange),
                         ),
                       ],
@@ -221,36 +271,34 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                   _buildTextField(_labelController, 'Address Label (e.g. Home, Office)', Icons.label),
-                   const SizedBox(height: 12),
-                   _buildTextField(_fullNameController, 'Full Name', Icons.person),
-                   const SizedBox(height: 12),
-                   Row(
-                     children: [
-                       Expanded(child: _buildTextField(_provinceController, 'Province', Icons.map)),
-                       const SizedBox(width: 12),
-                       Expanded(child: _buildTextField(_cityController, 'City', Icons.location_city)),
-                     ],
-                   ),
-                   const SizedBox(height: 12),
-                   _buildTextField(_barangayController, 'Barangay', Icons.location_on),
-                   const SizedBox(height: 12),
-                   _buildTextField(_streetController, 'Street Address / Building / House No.', Icons.home),
-                   const SizedBox(height: 12),
-                   _buildTextField(_postalController, 'Postal Code', Icons.mark_as_unread, keyboardType: TextInputType.number),
-                   const SizedBox(height: 24),
-                   SizedBox(
-                     width: double.infinity,
-                     height: 55,
-                     child: ElevatedButton(
-                       onPressed: _saveAddress,
-                       style: ElevatedButton.styleFrom(
-                         backgroundColor: AppColors.primaryOrange,
-                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                       ),
-                       child: const Text('Save Address', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                     ),
-                   ),
+                  _buildTextField(_labelController, 'Address Label (e.g. Home, Office)', Icons.label),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _buildTextField(_provinceController, 'Province', Icons.map)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildTextField(_cityController, 'City', Icons.location_city)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(_barangayController, 'Barangay', Icons.location_on),
+                  const SizedBox(height: 12),
+                  _buildTextField(_streetController, 'Street Address / Building / House No.', Icons.home),
+                  const SizedBox(height: 12),
+                  _buildTextField(_postalController, 'Postal Code', Icons.mark_as_unread, keyboardType: TextInputType.number),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: _saveAddress,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryOrange,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Save Address', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -274,9 +322,9 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
   }
 
   void _saveAddress() {
-    if (_fullNameController.text.isEmpty || _streetController.text.isEmpty || _cityController.text.isEmpty) {
+    if (_streetController.text.isEmpty || _cityController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in full name, street and city')),
+        const SnackBar(content: Text('Please fill in street and city')),
       );
       return;
     }

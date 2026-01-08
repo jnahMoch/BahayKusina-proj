@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import 'package:provider/provider.dart';
 import '../models/address_model.dart';
+import '../providers/auth_provider.dart';
 import 'map_address_picker_page.dart';
 
 class AddEditAddressPage extends StatefulWidget {
@@ -44,6 +46,14 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
     
     _isDefault = widget.address?.isDefault ?? widget.isDefaultInitially;
     _label = widget.address?.label ?? 'Home';
+
+    // Auto-fill the name from current user if available; field not shown
+    try {
+      final user = Provider.of<AuthProvider>(context, listen: false).currentUser;
+      if ((_nameController.text.isEmpty) && user != null && user.fullName.isNotEmpty) {
+        _nameController.text = user.fullName;
+      }
+    } catch (_) {}
   }
 
   @override
@@ -80,7 +90,7 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
   }
 
   void _submit() {
-    if (_nameController.text.isEmpty || _streetController.text.isEmpty || _selectedCity == null) {
+    if (_streetController.text.isEmpty || _selectedCity == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all required fields and pick location from map')),
       );
@@ -142,8 +152,7 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
                 children: [
                   const Text('Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 20),
-                  _buildTextField(_nameController, 'Full Name'),
-                  const SizedBox(height: 16),
+                  // Name field removed (redundant with account name)
 
                   const SizedBox(height: 16),
                   _buildLocationSelector(),

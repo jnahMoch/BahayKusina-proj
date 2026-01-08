@@ -29,7 +29,13 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    _refreshProfile();
     _fetchStats();
+  }
+
+  Future<void> _refreshProfile() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.refreshUserProfile();
   }
 
   Future<void> _fetchStats() async {
