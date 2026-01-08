@@ -312,11 +312,73 @@ class _OrderCard extends StatelessWidget {
     order_models.OrderStatus nextStatus,
   ) {
     return ElevatedButton(
-      onPressed: () {
-        Provider.of<VendorProvider>(
-          context,
-          listen: false,
-        ).updateOrderStatus(order.orderId, nextStatus);
+      onPressed: () async {
+        print('✓ Button pressed: $label');
+        print('  Current order status: ${order.status}');
+        print('  Target status: $nextStatus');
+        
+        try {
+          final vendorProvider = Provider.of<VendorProvider>(
+            context,
+            listen: false,
+          );
+          print('✓ VendorProvider obtained');
+          
+          // Show loading snackbar
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Updating order...'),
+                duration: Duration(seconds: 30),
+              ),
+            );
+          }
+          
+          // Execute with timeout of 10 seconds
+          final success = await vendorProvider.updateOrderStatus(
+            order.orderId,
+            nextStatus,
+          ).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              print('✗ updateOrderStatus timeout');
+              return false;
+            },
+          );
+          
+          print('✓ updateOrderStatus returned: $success');
+          
+          if (context.mounted) {
+            // Clear loading snackbar
+            ScaffoldMessenger.of(context).clearSnackBars();
+            
+            // Show result snackbar
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  success 
+                    ? '✓ Order accepted! Status: ${nextStatus.toString().split('.').last}'
+                    : '✗ Failed to update order. Please try again.',
+                ),
+                backgroundColor: success ? Colors.green : Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          print('✗ Exception in button: $e');
+          print('  Stack trace: $e');
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✗ Error: ${e.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
@@ -341,7 +403,7 @@ class _OrderCard extends StatelessWidget {
               context,
               "Accept Order",
               const Color(0xFFFF6B00),
-              order_models.OrderStatus.outForDelivery,
+              order_models.OrderStatus.confirmed,
             ),
           ),
           const SizedBox(width: 8),
@@ -367,6 +429,32 @@ class _OrderCard extends StatelessWidget {
                 "Decline",
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
               ),
+            ),
+          ),
+        ],
+      );
+    } else if (order.status == order_models.OrderStatus.confirmed) {
+      return Row(
+        children: [
+          Expanded(
+            child: _actionButton(
+              context,
+              "Start Preparing",
+              const Color(0xFFFF8C3B),
+              order_models.OrderStatus.preparing,
+            ),
+          ),
+        ],
+      );
+    } else if (order.status == order_models.OrderStatus.preparing) {
+      return Row(
+        children: [
+          Expanded(
+            child: _actionButton(
+              context,
+              "Mark Ready for Delivery",
+              const Color(0xFFFF6B00),
+              order_models.OrderStatus.outForDelivery,
             ),
           ),
         ],

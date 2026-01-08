@@ -224,14 +224,23 @@ class FirestoreService {
 
   Future<List<order_models.Order>> getVendorOrders(String vendorId) async {
     try {
+      print('✓ Fetching vendor orders for vendorId: $vendorId');
+      // Query without orderBy to avoid composite index requirement
       final snapshot = await _db
           .collection('orders')
           .where('vendorId', isEqualTo: vendorId)
-          .orderBy('orderDate', descending: true)
           .get();
 
-      return _snapshotToOrderList(snapshot);
+      print('✓ Fetched ${snapshot.docs.length} orders from Firestore');
+      final orders = _snapshotToOrderList(snapshot);
+      
+      // Sort by orderDate in memory (descending - newest first)
+      orders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
+      
+      print('✓ Parsed and sorted ${orders.length} orders successfully');
+      return orders;
     } catch (e) {
+      print('✗ Error fetching vendor orders: $e');
       AppLogger.error('Error fetching vendor orders: $e');
       return [];
     }
@@ -273,34 +282,52 @@ class FirestoreService {
   }) async {
     try {
       final statusStr = newStatus.toString().split('.').last;
+      print('✓ Updating order $orderId to status: $statusStr');
+
+      // First check if order exists
+      print('✓ Checking if order exists...');
+      final orderDoc = await _db.collection('orders').doc(orderId).get();
+      
+      if (!orderDoc.exists) {
+        print('✗ Order document does not exist: $orderId');
+        throw Exception('Order not found in database');
+      }
+      
+      print('✓ Order exists, proceeding with update...');
 
       // Update in top-level orders
+      print('✓ Updating top-level orders collection...');
       await _db.collection('orders').doc(orderId).update({'status': statusStr});
+      print('✓ Top-level order updated successfully');
 
-      // Update in user's subcollection if customerId is known
-      if (customerId != null) {
-        await _db
-            .collection('users')
-            .doc(customerId)
-            .collection('orders')
-            .doc(orderId)
-            .update({'status': statusStr});
-      } else {
-        // Find the order to get customerId
-        final orderDoc = await _db.collection('orders').doc(orderId).get();
-        if (orderDoc.exists) {
-          final cid = orderDoc.data()?['customerId'];
-          if (cid != null) {
-            await _db
-                .collection('users')
-                .doc(cid)
-                .collection('orders')
-                .doc(orderId)
-                .update({'status': statusStr});
-          }
-        }
+      // Get customerId from order if not provided
+      if (customerId == null) {
+        customerId = orderDoc.data()?['customerId'];
+        print('✓ Found customerId from order: $customerId');
       }
+
+      // Update in user's subcollection if customerId is available
+      if (customerId != null && customerId.isNotEmpty) {
+        print('✓ Updating user subcollection for customerId: $customerId');
+        try {
+          await _db
+              .collection('users')
+              .doc(customerId)
+              .collection('orders')
+              .doc(orderId)
+              .update({'status': statusStr});
+          print('✓ User subcollection updated successfully');
+        } catch (e) {
+          print('⚠ Warning: Could not update user subcollection: $e');
+          // Don't rethrow - the main order update succeeded
+        }
+      } else {
+        print('⚠ No customerId available for user subcollection update');
+      }
+      
+      print('✓ Order status update completed successfully');
     } catch (e) {
+      print('✗ Error updating order status: $e');
       AppLogger.error('Error updating order status: $e');
       rethrow;
     }

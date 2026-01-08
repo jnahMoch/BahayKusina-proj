@@ -66,11 +66,13 @@ class VendorProvider with ChangeNotifier {
 
   // Fetch all vendor data
   Future<void> refreshVendorData(String vendorId) async {
+    print('✓ VendorProvider.refreshVendorData called for vendorId: $vendorId');
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      print('✓ Fetching orders and meals in parallel...');
       // Run both fetches in parallel
       final results = await Future.wait([
         _firestoreService.getVendorOrders(vendorId),
@@ -80,19 +82,21 @@ class VendorProvider with ChangeNotifier {
       final fetchedOrders = results[0] as List<order_models.Order>;
       final fetchedMeals = results[1] as List<MealPackage>;
 
-      // If both are empty, use fallbacks for demo/offline purposes
-      if (fetchedOrders.isEmpty && fetchedMeals.isEmpty) {
-        _orders = List.from(_fallbackOrders);
-        _meals = List.from(_fallbackMeals);
-      } else {
-        _orders = fetchedOrders;
-        _meals = fetchedMeals;
-      }
+      print('✓ Fetched ${fetchedOrders.length} orders and ${fetchedMeals.length} meals');
 
+      // Use fetched data, fallback only if completely empty
+      _orders = fetchedOrders.isNotEmpty ? fetchedOrders : List.from(_fallbackOrders);
+      _meals = fetchedMeals.isNotEmpty ? fetchedMeals : List.from(_fallbackMeals);
+
+      print('✓ VendorProvider.refreshVendorData completed successfully');
+      print('  - Total orders: ${_orders.length}');
+      print('  - Total meals: ${_meals.length}');
+      
       AppLogger.info(
         'Fetched ${_orders.length} orders and ${_meals.length} meals for vendor $vendorId',
       );
     } catch (e) {
+      print('✗ Error refreshing vendor data: $e');
       _error = e.toString();
       AppLogger.error('Error refreshing vendor data: $e');
       // Use fallbacks on error
@@ -110,13 +114,25 @@ class VendorProvider with ChangeNotifier {
     order_models.OrderStatus status,
   ) async {
     try {
+      final statusStr = status.toString().split('.').last;
+      print('✓ VendorProvider.updateOrderStatus called');
+      print('  - orderId: $orderId');
+      print('  - new status: $statusStr');
+      
+      // Call the service to update in Firestore
       await _firestoreService.updateOrderStatus(orderId, status);
+      print('✓ FirestoreService.updateOrderStatus completed');
 
-      // Update local state to avoid full refresh
+      // Update local state immediately for UI responsiveness
       final index = _orders.indexWhere((o) => o.orderId == orderId);
+      print('  - Order index in local list: $index');
+      
       if (index != -1) {
         final oldOrder = _orders[index];
-        _orders[index] = order_models.Order(
+        print('✓ Found order in local state, updating...');
+        
+        // Create new order with updated status
+        final updatedOrder = order_models.Order(
           orderId: oldOrder.orderId,
           orderDate: oldOrder.orderDate,
           items: oldOrder.items,
@@ -130,11 +146,25 @@ class VendorProvider with ChangeNotifier {
           paymentMethod: oldOrder.paymentMethod,
           riderName: oldOrder.riderName,
           riderEta: oldOrder.riderEta,
+          deliveryCoordinates: oldOrder.deliveryCoordinates,
         );
+        
+        _orders[index] = updatedOrder;
+        print('✓ Local state updated with new order object');
+        print('  - Old status: ${oldOrder.status}');
+        print('  - New status: ${_orders[index].status}');
+        
         notifyListeners();
+        print('✓ Listeners notified');
+      } else {
+        print('⚠ Warning: Order not found in local state (may be fallback data)');
       }
+      
+      print('✓ updateOrderStatus completed successfully');
       return true;
     } catch (e) {
+      print('✗ Error in updateOrderStatus: $e');
+      print('  Stack trace: $e');
       AppLogger.error('Error updating order status: $e');
       return false;
     }
