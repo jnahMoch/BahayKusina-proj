@@ -11,13 +11,13 @@ class CartProvider extends ChangeNotifier {
   List<CartItem> get items => _cart.items;
   int get itemCount => _cart.itemCount;
   int get totalQuantity => _cart.totalQuantity;
-  int get totalPrice => _cart.totalPrice;
+  double get totalPrice => _cart.totalPrice;
   bool get isEmpty => _cart.isEmpty;
 
   // Add item to cart
   void addToCart(MealPackage meal, int quantity) {
     if (quantity <= 0) return;
-    
+
     final cartItem = CartItem(meal: meal, quantity: quantity);
     _cart.addItem(cartItem);
     notifyListeners();

@@ -232,6 +232,7 @@ class MealCard extends StatelessWidget {
   Widget _buildImage(String? url) {
     if (url == null || url.isEmpty) return _buildPlaceholder();
 
+    // Check if it's a network URL (Firebase Storage, Unsplash, etc.)
     bool isNetwork = url.startsWith('http') || url.startsWith('https');
 
     if (isNetwork) {
@@ -240,11 +241,46 @@ class MealCard extends StatelessWidget {
         width: 100,
         height: 100,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: 100,
+            height: 100,
+            color: Colors.grey.shade100,
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                    : null,
+                strokeWidth: 2,
+                color: HomePage.primaryOrange,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('✗ Image load error for URL: $url');
+          print('  Error: $error');
+          return _buildPlaceholder();
+        },
       );
-    } else {
+    } else if (url.startsWith('assets/')) {
+      // Local asset image
       return Image.asset(
         url,
+        width: 100,
+        height: 100,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('✗ Asset load error for: $url');
+          return _buildPlaceholder();
+        },
+      );
+    } else {
+      // Fallback - try as asset
+      return Image.asset(
+        'assets/images/food_package_1.jpg',
         width: 100,
         height: 100,
         fit: BoxFit.cover,

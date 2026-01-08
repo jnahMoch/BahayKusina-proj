@@ -7,6 +7,7 @@ import 'add_package_page.dart';
 import '../providers/vendor_provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/meal_package.dart';
+import '../services/firestore_service.dart';
 
 class ManagePackagesView extends StatelessWidget {
   const ManagePackagesView({super.key});
@@ -201,14 +202,6 @@ class _VendorPackageCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _actionBtn(
-                        Icons.copy_outlined,
-                        "Duplicate",
-                        onPressed: () => _duplicatePackage(context),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _actionBtn(
                         Icons.delete_outline,
                         "Delete",
                         isDelete: true,
@@ -226,30 +219,58 @@ class _VendorPackageCard extends StatelessWidget {
   }
 
   Widget _buildImage() {
+    // Default placeholder image
+    const String placeholderUrl = 'https://images.unsplash.com/photo-1626074353765-517a681e40be?w=400';
+    
     if (meal.imageUrl.startsWith('assets/')) {
       return Image.asset(
         meal.imageUrl,
         height: 160,
         width: double.infinity,
         fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Image.network(
+          placeholderUrl,
+          height: 160,
+          width: double.infinity,
+          fit: BoxFit.cover,
+        ),
       );
-    } else if (meal.imageUrl.isNotEmpty) {
+    } else if (meal.imageUrl.isNotEmpty && 
+               (meal.imageUrl.startsWith('http://') || meal.imageUrl.startsWith('https://'))) {
       return Image.network(
         meal.imageUrl,
+        height: 160,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 160,
+            color: Colors.grey.shade100,
+            child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Image.network(
+          placeholderUrl,
+          height: 160,
+          width: double.infinity,
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      // Use placeholder for empty or invalid URLs
+      return Image.network(
+        placeholderUrl,
         height: 160,
         width: double.infinity,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) => Container(
           height: 160,
           color: Colors.grey.shade200,
-          child: const Icon(Icons.broken_image, color: Colors.grey),
+          child: const Icon(Icons.restaurant, size: 40, color: Colors.grey),
         ),
-      );
-    } else {
-      return Container(
-        height: 160,
-        color: Colors.grey.shade200,
-        child: const Icon(Icons.image, color: Colors.grey),
       );
     }
   }
@@ -304,67 +325,99 @@ class _VendorPackageCard extends StatelessWidget {
           initialPrice: meal.price.toString(),
           initialStock: meal.left.toString(),
           initialDesc: meal.desc,
-        ),
-      ),
-    );
-  }
-
-  void _duplicatePackage(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddPackagePage(
-          initialTitle: "${meal.title} (Copy)",
-          initialCategory: meal.type,
-          initialPrice: meal.price.toString(),
-          initialStock: meal.left.toString(),
-          initialDesc: meal.desc,
+          initialImageUrl: meal.imageUrl,
         ),
       ),
     );
   }
 
   void _deletePackage(BuildContext context) {
+    print('🗑️ Delete button pressed for: ${meal.title} (ID: ${meal.id})');
+    
+    // Get providers before showing dialog
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final vendorProvider = Provider.of<VendorProvider>(context, listen: false);
+    final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Delete Package"),
         content: Text("Are you sure you want to delete '${meal.title}'?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              print('🗑️ Cancel pressed');
+              Navigator.pop(dialogContext);
+            },
             child: const Text("Cancel"),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              print('🗑️ Confirm delete pressed');
+              Navigator.pop(dialogContext);
+              
+              // Show loading indicator
+              scaffoldMessenger.showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Text("Deleting..."),
+                    ],
+                  ),
+                  duration: Duration(seconds: 10),
+                ),
+              );
+              
               try {
+                // Delete from Firestore
+                print('🗑️ Meal ID: ${meal.id}');
+                print('🗑️ Vendor ID: $vendorId');
+                
                 if (meal.id.isNotEmpty && !meal.id.startsWith('fallback_')) {
+                  print('🗑️ Deleting from Firestore: ${meal.id}');
                   await FirebaseFirestore.instance
                       .collection('meals')
                       .doc(meal.id)
                       .delete();
+                  print('🗑️ Firestore delete successful');
+                } else {
+                  print('🗑️ Fallback meal - removing from local list only');
                 }
 
-                final authProvider = Provider.of<AuthProvider>(
-                  context,
-                  listen: false,
-                );
-                final vendorId =
-                    authProvider.currentUser?.userId ?? 'vendor_nanay';
-
-                Provider.of<VendorProvider>(
-                  context,
-                  listen: false,
-                ).refreshVendorData(vendorId);
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("${meal.title} deleted")),
+                // Remove from local list immediately
+                vendorProvider.removeMeal(meal.id);
+                
+                // Also clear caches
+                FirestoreService().clearAllCache();
+                
+                scaffoldMessenger.hideCurrentSnackBar();
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text("✓ ${meal.title} deleted successfully"),
+                    backgroundColor: Colors.green,
+                  ),
                 );
               } catch (e) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text("Error deleting: $e")));
+                print('🗑️ ERROR: $e');
+                scaffoldMessenger.hideCurrentSnackBar();
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text("Error deleting: $e"),
+                    backgroundColor: Colors.red,
+                  ),
+                );
               }
             },
             child: const Text("Delete", style: TextStyle(color: Colors.red)),

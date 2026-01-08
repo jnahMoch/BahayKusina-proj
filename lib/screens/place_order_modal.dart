@@ -95,7 +95,7 @@ class _PlaceOrderModalState extends State<PlaceOrderModal> {
     }
   }
 
-  Future<void> _handlePlaceOrder(BuildContext context, int totalAmount) async {
+  Future<void> _handlePlaceOrder(BuildContext context, double totalAmount) async {
     if (_nameController.text.isEmpty ||
         _addressController.text.isEmpty ||
         _contactController.text.isEmpty) {

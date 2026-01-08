@@ -11,7 +11,7 @@ class CartItem {
   });
 
   // Calculate total price for this cart item
-  int get totalPrice => meal.price * quantity;
+  double get totalPrice => meal.price * quantity;
 
   // Copy with method for immutability
   CartItem copyWith({int? quantity}) {

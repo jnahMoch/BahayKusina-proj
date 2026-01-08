@@ -2,19 +2,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-enum OrderStatus { 
-  pending, 
-  confirmed, 
-  preparing, 
-  outForDelivery, 
-  delivered, 
-  cancelled 
+enum OrderStatus {
+  pending,
+  confirmed,
+  preparing,
+  outForDelivery,
+  delivered,
+  cancelled,
 }
 
 class OrderItem {
   final String mealTitle;
   final int quantity;
-  final int pricePerUnit;
+  final double pricePerUnit;
 
   const OrderItem({
     required this.mealTitle,
@@ -22,14 +22,14 @@ class OrderItem {
     required this.pricePerUnit,
   });
 
-  int get totalPrice => pricePerUnit * quantity;
+  double get totalPrice => pricePerUnit * quantity;
 }
 
 class Order {
   final String orderId;
   final DateTime orderDate;
   final List<OrderItem> items;
-  final int totalAmount;
+  final double totalAmount;
   final OrderStatus status;
   final String vendorId;
   final String vendorName;

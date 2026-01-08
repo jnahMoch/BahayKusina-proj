@@ -218,7 +218,7 @@ class _HomePageState extends State<HomePage> {
                     vendor: mealMap['vendor'] as String,
                     vendorId: 'placeholder_id',
                     desc: mealMap['desc'] as String,
-                    price: mealMap['price'] as int,
+                    price: (mealMap['price'] as num).toDouble(),
                     left: mealMap['left'] as int,
                     imageUrl: mealMap['image'] as String,
                   );

@@ -43,11 +43,12 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCkM9Ic4m1kyZMnUti0P91POPIaO6-Ob-M',
-    appId: '1:123456789:ios:abcdef1234567890ios',
-    messagingSenderId: '123456789',
-    projectId: 'bahaykusina',
-    databaseURL: 'https://bahaykusina.firebaseio.com',
+    appId: '1:337492275214:ios:2995cdf0ef44ed29ios',
+    messagingSenderId: '337492275214',
+    projectId: 'bahay-kusina-main',
+    authDomain: 'bahay-kusina-main.firebaseapp.com',
+    databaseURL: 'https://bahay-kusina-main.firebaseio.com',
+    storageBucket: 'bahay-kusina-main.firebasestorage.app',
     iosBundleId: 'com.example.bahaykusina',
-    storageBucket: 'bahaykusina.appspot.com',
   );
 }

@@ -8,7 +8,7 @@ class MealPackage {
   final String vendor;
   final String vendorId;
   final String desc;
-  final int price;
+  final double price;
   final int left; // Stock/Quantity Available
   final String imageUrl;
   final List<String> packageItems; // New field

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 import 'meal_card.dart';
 import 'orders_page.dart';
 import 'profile_page.dart';
@@ -25,6 +26,7 @@ class _HomePageState extends State<HomePage> {
   final FirestoreService _firestoreService = FirestoreService();
   List<MealPackage> _allMeals = List.from(_fallbackMeals);
   bool _isLoading = false;
+  StreamSubscription<List<MealPackage>>? _mealsSubscription;
 
   // Fallback data if Firestore is empty/offline
   static final List<MealPackage> _fallbackMeals = [
@@ -35,7 +37,7 @@ class _HomePageState extends State<HomePage> {
       vendorId: 'fallback_1',
       desc:
           'Classic Filipino breakfast with garlic rice, egg, and choice of meat.',
-      price: 120,
+      price: 120.0,
       left: 15,
       imageUrl: 'https://images.unsplash.com/photo-1626074353765-517a681e40be',
     ),
@@ -45,7 +47,7 @@ class _HomePageState extends State<HomePage> {
       vendor: 'Mama Joy\'s House',
       vendorId: 'fallback_2',
       desc: 'Savory chicken and pork adobo served over warm white rice.',
-      price: 150,
+      price: 150.0,
       left: 10,
       imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c',
     ),
@@ -55,7 +57,7 @@ class _HomePageState extends State<HomePage> {
       vendor: 'Kusina de Manila',
       vendorId: 'fallback_3',
       desc: 'Sour tamarind soup with tender pork and local vegetables.',
-      price: 180,
+      price: 180.0,
       left: 5,
       imageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19',
     ),
@@ -65,7 +67,7 @@ class _HomePageState extends State<HomePage> {
       vendor: 'Lola\'s Panciteria',
       vendorId: 'fallback_4',
       desc: 'Stir-fried noodles with crisp vegetables and savory toppings.',
-      price: 90,
+      price: 90.0,
       left: 20,
       imageUrl: 'https://images.unsplash.com/photo-1585032226651-759b368d7246',
     ),
@@ -75,7 +77,7 @@ class _HomePageState extends State<HomePage> {
       vendor: 'Sweet Treats',
       vendorId: 'fallback_5',
       desc: 'Rich and creamy custard with a caramelized sugar topping.',
-      price: 75,
+      price: 75.0,
       left: 12,
       imageUrl: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc2fe0a',
     ),
@@ -87,6 +89,13 @@ class _HomePageState extends State<HomePage> {
     // Start with fallback meals immediately so the page is never empty
     _allMeals = List.from(_fallbackMeals);
     _fetchMeals();
+    _startRealtimeMealUpdates();
+  }
+
+  @override
+  void dispose() {
+    _mealsSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchMeals() async {
@@ -113,6 +122,33 @@ class _HomePageState extends State<HomePage> {
         });
       }
     }
+  }
+
+  void _startRealtimeMealUpdates() {
+    print('✓ Starting real-time meal updates for customers');
+
+    // Cancel any existing subscription
+    _mealsSubscription?.cancel();
+
+    _mealsSubscription = _firestoreService.streamAllMeals().listen(
+      (meals) {
+        print('✓ Real-time update: Received ${meals.length} meals');
+        if (mounted) {
+          setState(() {
+            _allMeals = meals.isNotEmpty ? meals : _fallbackMeals;
+          });
+        }
+      },
+      onError: (error) {
+        print('✗ Error in real-time meal updates: $error');
+        // Keep showing fallback meals on error
+        if (mounted) {
+          setState(() {
+            _allMeals = _fallbackMeals;
+          });
+        }
+      },
+    );
   }
 
   @override

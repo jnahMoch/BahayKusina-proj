@@ -7,7 +7,7 @@ import 'track_order_page.dart';
 
 class OrderConfirmationPage extends StatelessWidget {
   final String orderId;
-  final int totalAmount;
+  final double totalAmount;
   final String deliveryAddress;
   final String paymentMethod;
   final String estimatedDelivery;

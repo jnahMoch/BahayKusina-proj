@@ -6,7 +6,34 @@ import '../models/order.dart' as order_models;
 import '../utils/logger.dart';
 
 class FirestoreService {
+  // Singleton pattern
+  static final FirestoreService _instance = FirestoreService._internal();
+  factory FirestoreService() => _instance;
+  FirestoreService._internal();
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // Simple cache for vendor data
+  final Map<String, List<order_models.Order>> _ordersCache = {};
+  final Map<String, List<MealPackage>> _mealsCache = {};
+  final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheDuration = Duration(minutes: 5);
+
+  // Clear all caches - call this after adding/updating packages
+  void clearCache([String? vendorId]) {
+    if (vendorId != null) {
+      _ordersCache.remove(vendorId);
+      _mealsCache.remove(vendorId);
+      _cacheTimestamps.remove('orders_$vendorId');
+      _cacheTimestamps.remove('meals_$vendorId');
+      print('✓ FirestoreService: Cleared cache for vendor $vendorId');
+    } else {
+      _ordersCache.clear();
+      _mealsCache.clear();
+      _cacheTimestamps.clear();
+      print('✓ FirestoreService: Cleared all caches');
+    }
+  }
 
   // ===== MEALS COLLECTION =====
   Future<List<MealPackage>> getMealPackages() async {
@@ -21,7 +48,7 @@ class FirestoreService {
               vendor: doc['vendor'] ?? '',
               vendorId: doc['vendorId'] ?? 'unknown_vendor',
               desc: doc['desc'] ?? '',
-              price: (doc['price'] ?? 0).toInt(),
+              price: (doc['price'] ?? 0).toDouble(),
               left: (doc['left'] ?? 0).toInt(),
               imageUrl: doc['imageUrl'] ?? '',
             ),
@@ -33,13 +60,83 @@ class FirestoreService {
     }
   }
 
-  Future<List<MealPackage>> getVendorMeals(String vendorId) async {
+  // Real-time stream of all meals (for customers to see new packages instantly)
+  Stream<List<MealPackage>> streamAllMeals() {
+    print('✓ FirestoreService.streamAllMeals - Starting stream');
+
     try {
-      final snapshot = await _db
+      return _db
           .collection('meals')
-          .where('vendorId', isEqualTo: vendorId)
-          .get();
-      return snapshot.docs
+          .snapshots()
+          .map((snapshot) {
+            print(
+              '✓ FirestoreService.streamAllMeals - Received ${snapshot.docs.length} meals',
+            );
+
+            return snapshot.docs
+                .map(
+                  (doc) => MealPackage(
+                    id: doc.id,
+                    type: doc['type'] ?? 'General',
+                    title: doc['title'] ?? '',
+                    vendor: doc['vendor'] ?? '',
+                    vendorId: doc['vendorId'] ?? 'unknown_vendor',
+                    desc: doc['desc'] ?? '',
+                    price: (doc['price'] ?? 0).toDouble(),
+                    left: (doc['left'] ?? 0).toInt(),
+                    imageUrl: doc['imageUrl'] ?? '',
+                  ),
+                )
+                .toList();
+          })
+          .handleError((error) {
+            print('✗ FirestoreService.streamAllMeals - Error: $error');
+            AppLogger.error('Error streaming meals: $error');
+          });
+    } catch (e) {
+      print('✗ FirestoreService.streamAllMeals - Error: $e');
+      AppLogger.error('Error setting up meals stream: $e');
+      return Stream.error(e);
+    }
+  }
+
+  Future<List<MealPackage>> getVendorMeals(String vendorId, {bool forceRefresh = false}) async {
+    try {
+      // Check cache first (unless force refresh)
+      if (!forceRefresh && _mealsCache.containsKey(vendorId)) {
+        final cacheTime = _cacheTimestamps['meals_$vendorId'];
+        if (cacheTime != null &&
+            DateTime.now().difference(cacheTime) < _cacheDuration) {
+          print('✓ Returning cached meals for vendorId: $vendorId');
+          return _mealsCache[vendorId]!;
+        }
+      }
+
+      if (forceRefresh) {
+        print('✓ Force refreshing meals for vendorId: $vendorId');
+        // Clear the cache for this vendor
+        _mealsCache.remove(vendorId);
+        _cacheTimestamps.remove('meals_$vendorId');
+      }
+
+      print('✓ Fetching vendor meals for vendorId: $vendorId (not cached)');
+
+      // Try to get from server first, fall back to cache if offline
+      QuerySnapshot snapshot;
+      try {
+        snapshot = await _db
+            .collection('meals')
+            .where('vendorId', isEqualTo: vendorId)
+            .get(const GetOptions(source: Source.serverAndCache));
+      } catch (e) {
+        print('⚠ Server fetch failed, trying cache: $e');
+        snapshot = await _db
+            .collection('meals')
+            .where('vendorId', isEqualTo: vendorId)
+            .get(const GetOptions(source: Source.cache));
+      }
+
+      final meals = snapshot.docs
           .map(
             (doc) => MealPackage(
               id: doc.id,
@@ -48,12 +145,19 @@ class FirestoreService {
               vendor: doc['vendor'] ?? '',
               vendorId: doc['vendorId'] ?? 'unknown_vendor',
               desc: doc['desc'] ?? '',
-              price: (doc['price'] ?? 0).toInt(),
+              price: (doc['price'] ?? 0).toDouble(),
               left: (doc['left'] ?? 0).toInt(),
               imageUrl: doc['imageUrl'] ?? '',
             ),
           )
           .toList();
+
+      // Cache the results
+      _mealsCache[vendorId] = meals;
+      _cacheTimestamps['meals_$vendorId'] = DateTime.now();
+      print('✓ Cached ${meals.length} meals for future requests');
+
+      return meals;
     } catch (e) {
       AppLogger.error('Error fetching vendor meals: $e');
       return [];
@@ -71,7 +175,7 @@ class FirestoreService {
           vendor: doc['vendor'] ?? '',
           vendorId: doc['vendorId'] ?? 'unknown_vendor',
           desc: doc['desc'] ?? '',
-          price: (doc['price'] ?? 0).toInt(),
+          price: (doc['price'] ?? 0).toDouble(),
           left: (doc['left'] ?? 0).toInt(),
           imageUrl: doc['imageUrl'] ?? '',
         );
@@ -149,48 +253,55 @@ class FirestoreService {
   }
 
   Stream<order_models.Order?> streamOrder(String orderId) {
-    print('✓ FirestoreService.streamOrder - Starting stream for orderId: "$orderId"');
-    
+    print(
+      '✓ FirestoreService.streamOrder - Starting stream for orderId: "$orderId"',
+    );
+
     try {
-      return _db
-          .collection('orders')
-          .doc(orderId)
-          .snapshots()
-          .map((snapshot) {
-            print('✓ FirestoreService.streamOrder - Snapshot received, exists: ${snapshot.exists}');
-            
-            if (!snapshot.exists) {
-              print('✗ FirestoreService.streamOrder - Order "$orderId" not found in Firestore');
-              return null;
-            }
-            
-            final data = snapshot.data() as Map<String, dynamic>;
-            print('✓ FirestoreService.streamOrder - Order data keys: ${data.keys.toList()}');
-            
-            // Parse delivery coordinates if available
-            LatLng? deliveryCoordinates;
-            if (data['deliveryCoordinates'] != null) {
-              final coords = data['deliveryCoordinates'] as Map<String, dynamic>;
-              deliveryCoordinates = LatLng(
-                coords['latitude'] as double,
-                coords['longitude'] as double,
-              );
-            }
-            
-            // Safe date parsing
-            DateTime orderDate = DateTime.now();
-            if (data['orderDate'] != null) {
-              try {
-                orderDate = (data['orderDate'] as Timestamp).toDate();
-              } catch (e) {
-                print('✗ FirestoreService.streamOrder - Could not parse orderDate: $e');
-              }
-            }
-            
-            final order = order_models.Order(
-              orderId: data['orderId'] ?? '',
-              orderDate: orderDate,
-              items: (data['items'] as List?)
+      return _db.collection('orders').doc(orderId).snapshots().map((snapshot) {
+        print(
+          '✓ FirestoreService.streamOrder - Snapshot received, exists: ${snapshot.exists}',
+        );
+
+        if (!snapshot.exists) {
+          print(
+            '✗ FirestoreService.streamOrder - Order "$orderId" not found in Firestore',
+          );
+          return null;
+        }
+
+        final data = snapshot.data() as Map<String, dynamic>;
+        print(
+          '✓ FirestoreService.streamOrder - Order data keys: ${data.keys.toList()}',
+        );
+
+        // Parse delivery coordinates if available
+        LatLng? deliveryCoordinates;
+        if (data['deliveryCoordinates'] != null) {
+          final coords = data['deliveryCoordinates'] as Map<String, dynamic>;
+          deliveryCoordinates = LatLng(
+            coords['latitude'] as double,
+            coords['longitude'] as double,
+          );
+        }
+
+        // Safe date parsing
+        DateTime orderDate = DateTime.now();
+        if (data['orderDate'] != null) {
+          try {
+            orderDate = (data['orderDate'] as Timestamp).toDate();
+          } catch (e) {
+            print(
+              '✗ FirestoreService.streamOrder - Could not parse orderDate: $e',
+            );
+          }
+        }
+
+        final order = order_models.Order(
+          orderId: data['orderId'] ?? '',
+          orderDate: orderDate,
+          items:
+              (data['items'] as List?)
                   ?.map(
                     (item) => order_models.OrderItem(
                       mealTitle: item['mealTitle'] ?? '',
@@ -198,23 +309,30 @@ class FirestoreService {
                       pricePerUnit: (item['pricePerUnit'] ?? 0).toInt(),
                     ),
                   )
-                  .toList() ?? [],
-              totalAmount: (data['totalAmount'] ?? 0).toInt(),
-              status: _parseOrderStatus(data['status'] ?? 'pending'),
-              vendorId: data['vendorId'] ?? '',
-              vendorName: data['vendorName'] ?? '',
-              customerName: data['customerName'] ?? 'Customer',
-              deliveryAddress: data['deliveryAddress'] ?? '',
-              contactNumber: data['contactNumber'] ?? '',
-              paymentMethod: data['paymentMethod'] ?? '',
-              riderName: data['riderName']?.toString().isEmpty == true ? null : data['riderName'],
-              riderEta: data['riderEta']?.toString().isEmpty == true ? null : data['riderEta'],
-              deliveryCoordinates: deliveryCoordinates,
-            );
-            
-            print('✓ FirestoreService.streamOrder - Order parsed successfully: ${order.orderId}, status: ${order.status}');
-            return order;
-          });
+                  .toList() ??
+              [],
+          totalAmount: (data['totalAmount'] ?? 0).toInt(),
+          status: _parseOrderStatus(data['status'] ?? 'pending'),
+          vendorId: data['vendorId'] ?? '',
+          vendorName: data['vendorName'] ?? '',
+          customerName: data['customerName'] ?? 'Customer',
+          deliveryAddress: data['deliveryAddress'] ?? '',
+          contactNumber: data['contactNumber'] ?? '',
+          paymentMethod: data['paymentMethod'] ?? '',
+          riderName: data['riderName']?.toString().isEmpty == true
+              ? null
+              : data['riderName'],
+          riderEta: data['riderEta']?.toString().isEmpty == true
+              ? null
+              : data['riderEta'],
+          deliveryCoordinates: deliveryCoordinates,
+        );
+
+        print(
+          '✓ FirestoreService.streamOrder - Order parsed successfully: ${order.orderId}, status: ${order.status}',
+        );
+        return order;
+      });
     } catch (e) {
       AppLogger.error('Error streaming order: $e');
       print('✗ FirestoreService.streamOrder - Error: $e');
@@ -224,7 +342,17 @@ class FirestoreService {
 
   Future<List<order_models.Order>> getVendorOrders(String vendorId) async {
     try {
-      print('✓ Fetching vendor orders for vendorId: $vendorId');
+      // Check cache first
+      if (_ordersCache.containsKey(vendorId)) {
+        final cacheTime = _cacheTimestamps['orders_$vendorId'];
+        if (cacheTime != null &&
+            DateTime.now().difference(cacheTime) < _cacheDuration) {
+          print('✓ Returning cached orders for vendorId: $vendorId');
+          return _ordersCache[vendorId]!;
+        }
+      }
+
+      print('✓ Fetching vendor orders for vendorId: $vendorId (not cached)');
       // Query without orderBy to avoid composite index requirement
       final snapshot = await _db
           .collection('orders')
@@ -233,10 +361,15 @@ class FirestoreService {
 
       print('✓ Fetched ${snapshot.docs.length} orders from Firestore');
       final orders = _snapshotToOrderList(snapshot);
-      
+
       // Sort by orderDate in memory (descending - newest first)
       orders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
-      
+
+      // Cache the results
+      _ordersCache[vendorId] = orders;
+      _cacheTimestamps['orders_$vendorId'] = DateTime.now();
+      print('✓ Cached ${orders.length} orders for future requests');
+
       print('✓ Parsed and sorted ${orders.length} orders successfully');
       return orders;
     } catch (e) {
@@ -275,6 +408,115 @@ class FirestoreService {
     }).toList();
   }
 
+  // Real-time stream for vendor orders (for live updates when customer places order)
+  Stream<List<order_models.Order>> streamVendorOrders(String vendorId) {
+    print(
+      '✓ FirestoreService.streamVendorOrders - Starting stream for vendorId: "$vendorId"',
+    );
+
+    try {
+      return _db
+          .collection('orders')
+          .where('vendorId', isEqualTo: vendorId)
+          .orderBy('orderDate', descending: true)
+          .snapshots()
+          .map((snapshot) {
+            print(
+              '✓ FirestoreService.streamVendorOrders - Received ${snapshot.docs.length} orders',
+            );
+
+            return snapshot.docs.map((doc) {
+              final data = doc.data();
+
+              try {
+                final orderDateTimestamp = data['orderDate'];
+                DateTime parsedOrderDate;
+
+                if (orderDateTimestamp is Timestamp) {
+                  parsedOrderDate = orderDateTimestamp.toDate();
+                } else if (orderDateTimestamp is String) {
+                  parsedOrderDate = DateTime.parse(orderDateTimestamp);
+                } else {
+                  parsedOrderDate = DateTime.now();
+                }
+
+                final statusStr = (data['status'] ?? 'pending')
+                    .toString()
+                    .toLowerCase();
+                order_models.OrderStatus status =
+                    order_models.OrderStatus.pending;
+
+                switch (statusStr) {
+                  case 'confirmed':
+                    status = order_models.OrderStatus.confirmed;
+                    break;
+                  case 'preparing':
+                    status = order_models.OrderStatus.preparing;
+                    break;
+                  case 'outfordelivery':
+                  case 'out_for_delivery':
+                    status = order_models.OrderStatus.outForDelivery;
+                    break;
+                  case 'delivered':
+                    status = order_models.OrderStatus.delivered;
+                    break;
+                  case 'cancelled':
+                    status = order_models.OrderStatus.cancelled;
+                    break;
+                  default:
+                    status = order_models.OrderStatus.pending;
+                }
+
+                final itemsList =
+                    (data['items'] as List?)?.map((item) {
+                      return order_models.OrderItem(
+                        mealTitle: item['mealTitle'] ?? 'Unknown Meal',
+                        quantity: (item['quantity'] ?? 1).toInt(),
+                        pricePerUnit: (item['pricePerUnit'] ?? 0).toInt(),
+                      );
+                    }).toList() ??
+                    [];
+
+                final deliveryCoordinates = data['deliveryCoordinates'] != null
+                    ? LatLng(
+                        data['deliveryCoordinates']['latitude'] ?? 0.0,
+                        data['deliveryCoordinates']['longitude'] ?? 0.0,
+                      )
+                    : null;
+
+                return order_models.Order(
+                  orderId: doc.id,
+                  orderDate: parsedOrderDate,
+                  items: itemsList,
+                  totalAmount: (data['totalAmount'] ?? 0).toInt(),
+                  status: status,
+                  vendorId: data['vendorId'] ?? vendorId,
+                  vendorName: data['vendorName'] ?? 'Unknown Vendor',
+                  customerName: data['customerName'] ?? 'Unknown Customer',
+                  deliveryAddress: data['deliveryAddress'] ?? 'No address',
+                  contactNumber: data['contactNumber'] ?? 'No contact',
+                  paymentMethod: data['paymentMethod'] ?? 'Unknown',
+                  riderName: data['riderName'],
+                  riderEta: data['riderEta'],
+                  deliveryCoordinates: deliveryCoordinates,
+                );
+              } catch (e) {
+                print('✗ Error parsing order ${doc.id}: $e');
+                rethrow;
+              }
+            }).toList();
+          })
+          .handleError((error) {
+            print('✗ FirestoreService.streamVendorOrders - Error: $error');
+            AppLogger.error('Error streaming vendor orders: $error');
+          });
+    } catch (e) {
+      print('✗ FirestoreService.streamVendorOrders - Error: $e');
+      AppLogger.error('Error setting up vendor orders stream: $e');
+      return Stream.error(e);
+    }
+  }
+
   Future<void> updateOrderStatus(
     String orderId,
     order_models.OrderStatus newStatus, {
@@ -282,52 +524,69 @@ class FirestoreService {
   }) async {
     try {
       final statusStr = newStatus.toString().split('.').last;
-      print('✓ Updating order $orderId to status: $statusStr');
+      print(
+        '✓ FirestoreService.updateOrderStatus: Updating order $orderId to status: $statusStr',
+      );
 
-      // First check if order exists
-      print('✓ Checking if order exists...');
-      final orderDoc = await _db.collection('orders').doc(orderId).get();
-      
-      if (!orderDoc.exists) {
-        print('✗ Order document does not exist: $orderId');
-        throw Exception('Order not found in database');
+      // Prepare update data
+      final updateData = <String, dynamic>{
+        'status': statusStr,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Auto-assign rider info when status changes to Out for Delivery
+      if (newStatus == order_models.OrderStatus.outForDelivery) {
+        updateData['riderName'] = 'Mark Santos';
+        updateData['riderEta'] = '15 mins';
       }
-      
-      print('✓ Order exists, proceeding with update...');
 
-      // Update in top-level orders
-      print('✓ Updating top-level orders collection...');
-      await _db.collection('orders').doc(orderId).update({'status': statusStr});
-      print('✓ Top-level order updated successfully');
+      // Update in top-level orders collection directly (works offline with Firestore persistence)
+      print('  → Updating top-level orders collection...');
+      await _db.collection('orders').doc(orderId).update(updateData);
+      print(
+        '  ✓ Top-level order updated successfully (may be queued if offline)',
+      );
 
-      // Get customerId from order if not provided
-      if (customerId == null) {
-        customerId = orderDoc.data()?['customerId'];
-        print('✓ Found customerId from order: $customerId');
+      // Try to get customerId from cache or provided value
+      if (customerId == null || customerId.isEmpty) {
+        // Try to get from local cache without network requirement
+        try {
+          final orderDoc = await _db
+              .collection('orders')
+              .doc(orderId)
+              .get(const GetOptions(source: Source.cache));
+          customerId = orderDoc.data()?['customerId'];
+          print('  → Found customerId from cache: $customerId');
+        } catch (e) {
+          print('  ⚠ Could not get customerId from cache: $e');
+        }
       }
 
       // Update in user's subcollection if customerId is available
       if (customerId != null && customerId.isNotEmpty) {
-        print('✓ Updating user subcollection for customerId: $customerId');
+        print('  → Updating user subcollection for customerId: $customerId');
         try {
           await _db
               .collection('users')
               .doc(customerId)
               .collection('orders')
               .doc(orderId)
-              .update({'status': statusStr});
-          print('✓ User subcollection updated successfully');
+              .update(updateData);
+          print('  ✓ User subcollection updated successfully');
         } catch (e) {
-          print('⚠ Warning: Could not update user subcollection: $e');
+          print('  ⚠ Warning: Could not update user subcollection: $e');
           // Don't rethrow - the main order update succeeded
         }
       } else {
-        print('⚠ No customerId available for user subcollection update');
+        print('  ⚠ No customerId available for user subcollection update');
       }
-      
-      print('✓ Order status update completed successfully');
+
+      print('✓ FirestoreService.updateOrderStatus completed successfully');
+
+      // Clear orders cache to force refresh on next request
+      _clearOrdersCache();
     } catch (e) {
-      print('✗ Error updating order status: $e');
+      print('✗ FirestoreService.updateOrderStatus Error: $e');
       AppLogger.error('Error updating order status: $e');
       rethrow;
     }
@@ -424,5 +683,19 @@ class FirestoreService {
       default:
         return order_models.OrderStatus.pending;
     }
+  }
+
+  // ===== CACHE MANAGEMENT =====
+  void _clearOrdersCache() {
+    _ordersCache.clear();
+    _cacheTimestamps.removeWhere((key, value) => key.startsWith('orders_'));
+    print('✓ Orders cache cleared');
+  }
+
+  void clearAllCache() {
+    _ordersCache.clear();
+    _mealsCache.clear();
+    _cacheTimestamps.clear();
+    print('✓ All cache cleared');
   }
 }

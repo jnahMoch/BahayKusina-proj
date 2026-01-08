@@ -1,15 +1,15 @@
 // lib/screens/vendor_order_details_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../models/order.dart' as order_models;
+import '../providers/vendor_provider.dart';
+import '../providers/auth_provider.dart';
 
 class VendorOrderDetailsPage extends StatefulWidget {
   final order_models.Order order;
 
-  const VendorOrderDetailsPage({
-    super.key,
-    required this.order,
-  });
+  const VendorOrderDetailsPage({super.key, required this.order});
 
   static const Color primaryOrange = Color(0xFFFF6B00);
 
@@ -33,8 +33,13 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
     });
 
     try {
-      final updateData = {
-        'status': newStatus.toString().split('.').last,
+      final statusStr = newStatus.toString().split('.').last;
+      print(
+        '✓ VendorOrderDetailsPage: Updating order ${widget.order.orderId} to $statusStr',
+      );
+
+      final updateData = <String, dynamic>{
+        'status': statusStr,
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -44,11 +49,51 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
         updateData['riderEta'] = '15 mins';
       }
 
-      // Update in Firestore
+      // First, get the order document to find customerId
+      final orderDoc = await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.order.orderId)
+          .get();
+
+      final customerId = orderDoc.data()?['customerId'] as String?;
+      print('✓ Found customerId: $customerId');
+
+      // Update in main orders collection
       await FirebaseFirestore.instance
           .collection('orders')
           .doc(widget.order.orderId)
           .update(updateData);
+      print('✓ Main orders collection updated');
+
+      // Also update in user's subcollection if customerId exists
+      if (customerId != null && customerId.isNotEmpty) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(customerId)
+              .collection('orders')
+              .doc(widget.order.orderId)
+              .update(updateData);
+          print('✓ User subcollection updated for customer: $customerId');
+        } catch (e) {
+          print('⚠ Warning: Could not update user subcollection: $e');
+          // Don't fail the whole operation if subcollection update fails
+        }
+      }
+
+      // Update VendorProvider state so UI updates immediately
+      if (mounted) {
+        final vendorProvider = Provider.of<VendorProvider>(
+          context,
+          listen: false,
+        );
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
+
+        // Refresh vendor data to sync state
+        await vendorProvider.refreshVendorData(vendorId);
+        print('✓ VendorProvider state refreshed');
+      }
 
       setState(() {
         _currentStatus = newStatus;
@@ -57,13 +102,14 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Order status updated successfully'),
+          SnackBar(
+            content: Text('✓ Order ${statusStr}!'),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
+      print('✗ Error updating order status: $e');
       setState(() {
         _isUpdating = false;
       });
@@ -106,8 +152,8 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
               color: _currentStatus == order_models.OrderStatus.outForDelivery
                   ? VendorOrderDetailsPage.primaryOrange
                   : _currentStatus == order_models.OrderStatus.delivered
-                      ? Colors.green
-                      : Colors.blue,
+                  ? Colors.green
+                  : Colors.blue,
               borderRadius: BorderRadius.circular(4),
             ),
             child: Text(
@@ -148,34 +194,22 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
                   const SizedBox(height: 8),
                   Text(
                     'Contact: ${widget.order.contactNumber}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Address: ${widget.order.deliveryAddress}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Payment: ${widget.order.paymentMethod} (pending)',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Date: ${_formatDate(widget.order.orderDate)}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                   ),
                 ],
               ),
@@ -194,10 +228,7 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
                 children: [
                   const Text(
                     'Total Amount',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   Text(
                     '₱${widget.order.totalAmount}',
@@ -224,10 +255,7 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
                 children: [
                   const Text(
                     'Order Items:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   ...widget.order.items.map((item) {
@@ -270,10 +298,7 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
                 children: [
                   const Text(
                     'Update Status:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   _isUpdating
@@ -291,27 +316,41 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide: BorderSide(
+                                color: Colors.grey.shade300,
+                              ),
                             ),
                           ),
                           items: order_models.OrderStatus.values.map((status) {
                             return DropdownMenuItem(
                               value: status,
                               child: Text(
-                                status == order_models.OrderStatus.outForDelivery
+                                status ==
+                                        order_models.OrderStatus.outForDelivery
                                     ? 'Out for Delivery'
-                                    : status.toString().split('.').last[0].toUpperCase() +
-                                        status.toString().split('.').last.substring(1),
+                                    : status
+                                              .toString()
+                                              .split('.')
+                                              .last[0]
+                                              .toUpperCase() +
+                                          status
+                                              .toString()
+                                              .split('.')
+                                              .last
+                                              .substring(1),
                                 style: const TextStyle(fontSize: 14),
                               ),
                             );
                           }).toList(),
                           onChanged: (newStatus) {
-                            if (newStatus != null && newStatus != _currentStatus) {
+                            if (newStatus != null &&
+                                newStatus != _currentStatus) {
                               _showUpdateConfirmation(newStatus);
                             }
                           },
@@ -346,10 +385,7 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: VendorOrderDetailsPage.primaryOrange,
             ),
-            child: const Text(
-              'Update',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Update', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -358,8 +394,18 @@ class _VendorOrderDetailsPageState extends State<VendorOrderDetailsPage> {
 
   String _formatDate(DateTime dateTime) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final month = months[dateTime.month - 1];
     final period = dateTime.hour >= 12 ? 'PM' : 'AM';

@@ -134,7 +134,33 @@ class _OrderCard extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
-                _buildStatusBadge(order.status),
+                Row(
+                  children: [
+                    // Show "NEW" badge for orders less than 5 minutes old
+                    if (DateTime.now().difference(order.orderDate).inMinutes <
+                        5)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'NEW',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    _buildStatusBadge(order.status),
+                  ],
+                ),
               ],
             ),
             const Divider(height: 24),
@@ -158,102 +184,102 @@ class _OrderCard extends StatelessWidget {
                     onPressed: () {
                       // In a real app, uses url_launcher to dial
                     },
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...order.items
-              .map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          "${item.quantity}x ${item.mealTitle}",
-                          style: TextStyle(
-                            color: Colors.grey.shade700,
-                            fontSize: 14,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...order.items
+                .map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "${item.quantity}x ${item.mealTitle}",
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        "₱${item.totalPrice}",
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                        Text(
+                          "₱${item.totalPrice}",
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              )
-              .toList(),
-          const Divider(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        "$dateStr at $timeStr",
-                        style: const TextStyle(
-                          fontSize: 12,
+                )
+                .toList(),
+            const Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.access_time,
+                          size: 14,
                           color: Colors.grey,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 14,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(width: 4),
-                      SizedBox(
-                        width: 150,
-                        child: Text(
-                          order.deliveryAddress,
+                        const SizedBox(width: 4),
+                        Text(
+                          "$dateStr at $timeStr",
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Text(
-                "₱${order.totalAmount}",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF6B00),
-                  fontSize: 18,
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: 150,
+                          child: Text(
+                            order.deliveryAddress,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildTrackingActions(context),
-        ],
+                Text(
+                  "₱${order.totalAmount}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFF6B00),
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildTrackingActions(context),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -316,51 +342,61 @@ class _OrderCard extends StatelessWidget {
         print('✓ Button pressed: $label');
         print('  Current order status: ${order.status}');
         print('  Target status: $nextStatus');
-        
+
         try {
           final vendorProvider = Provider.of<VendorProvider>(
             context,
             listen: false,
           );
+          final authProvider = Provider.of<AuthProvider>(
+            context,
+            listen: false,
+          );
           print('✓ VendorProvider obtained');
-          
+
           // Show loading snackbar
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Updating order...'),
-                duration: Duration(seconds: 30),
+                duration: Duration(seconds: 60),
               ),
             );
           }
-          
-          // Execute with timeout of 10 seconds
-          final success = await vendorProvider.updateOrderStatus(
-            order.orderId,
-            nextStatus,
-          ).timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              print('✗ updateOrderStatus timeout');
-              return false;
-            },
-          );
-          
+
+          // Execute with timeout of 30 seconds for network operations
+          final success = await vendorProvider
+              .updateOrderStatus(order.orderId, nextStatus)
+              .timeout(
+                const Duration(seconds: 30),
+                onTimeout: () {
+                  print('✗ updateOrderStatus timeout after 30 seconds');
+                  return false;
+                },
+              );
+
           print('✓ updateOrderStatus returned: $success');
-          
+
+          // Refresh vendor data to ensure UI is in sync
+          if (success && context.mounted) {
+            final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
+            await vendorProvider.refreshVendorData(vendorId);
+            print('✓ Vendor data refreshed after status update');
+          }
+
           if (context.mounted) {
             // Clear loading snackbar
             ScaffoldMessenger.of(context).clearSnackBars();
-            
+
             // Show result snackbar
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  success 
-                    ? '✓ Order accepted! Status: ${nextStatus.toString().split('.').last}'
-                    : '✗ Failed to update order. Please try again.',
+                  success
+                      ? '✓ Order ${nextStatus.toString().split('.').last}!'
+                      : '⚠ Update may have failed. Check your connection and try again.',
                 ),
-                backgroundColor: success ? Colors.green : Colors.red,
+                backgroundColor: success ? Colors.green : Colors.orange,
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -372,9 +408,11 @@ class _OrderCard extends StatelessWidget {
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('✗ Error: ${e.toString()}'),
+                content: Text(
+                  'Connection error: ${e.toString().length > 50 ? "Check your internet" : e.toString()}',
+                ),
                 backgroundColor: Colors.red,
-                duration: const Duration(seconds: 3),
+                duration: const Duration(seconds: 4),
               ),
             );
           }
@@ -408,27 +446,11 @@ class _OrderCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: OutlinedButton(
-              onPressed: () {
-                Provider.of<VendorProvider>(
-                  context,
-                  listen: false,
-                ).updateOrderStatus(
-                  order.orderId,
-                  order_models.OrderStatus.cancelled,
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red),
-                foregroundColor: Colors.red,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                "Decline",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
+            child: _actionButton(
+              context,
+              "Decline",
+              Colors.red,
+              order_models.OrderStatus.cancelled,
             ),
           ),
         ],

@@ -14,12 +14,15 @@ class ShoppingCart {
   int get totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
 
   // Get total price
-  int get totalPrice => _items.fold(0, (sum, item) => sum + item.totalPrice);
+  double get totalPrice =>
+      _items.fold(0.0, (sum, item) => sum + item.totalPrice);
 
   // Add item to cart
   void addItem(CartItem item) {
-    final existingIndex = _items.indexWhere((i) => i.meal.title == item.meal.title);
-    
+    final existingIndex = _items.indexWhere(
+      (i) => i.meal.title == item.meal.title,
+    );
+
     if (existingIndex >= 0) {
       // Update quantity if item already exists
       _items[existingIndex] = _items[existingIndex].copyWith(

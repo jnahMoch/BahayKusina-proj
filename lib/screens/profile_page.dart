@@ -23,7 +23,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final FirestoreService _firestoreService = FirestoreService();
   int _totalOrders = 0;
-  int _totalSpent = 0;
+  double _totalSpent = 0.0;
   bool _isLoadingStats = true;
 
   @override
@@ -47,7 +47,10 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) {
         setState(() {
           _totalOrders = orders.length;
-          _totalSpent = orders.fold(0, (sum, order) => sum + order.totalAmount);
+          _totalSpent = orders.fold(
+            0.0,
+            (sum, order) => sum + order.totalAmount,
+          );
           _isLoadingStats = false;
         });
       }
