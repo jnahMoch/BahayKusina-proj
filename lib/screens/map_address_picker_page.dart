@@ -23,6 +23,7 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
   final _fullNameController = TextEditingController();
   final _provinceController = TextEditingController();
   final _cityController = TextEditingController();
+  final _barangayController = TextEditingController();
   final _streetController = TextEditingController();
   final _postalController = TextEditingController();
 
@@ -38,6 +39,7 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
       _fullNameController.text = widget.initialAddress!.fullName;
       _provinceController.text = widget.initialAddress!.province;
       _cityController.text = widget.initialAddress!.city;
+      _barangayController.text = widget.initialAddress!.barangay;
       _streetController.text = widget.initialAddress!.streetAddress;
       _postalController.text = widget.initialAddress!.postalCode;
     } else {
@@ -62,8 +64,9 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
     if (placemark != null) {
       setState(() {
         _provinceController.text = placemark.administrativeArea ?? '';
-        _cityController.text = placemark.locality ?? placemark.subLocality ?? '';
-        _streetController.text = placemark.street ?? '';
+        _cityController.text = placemark.locality ?? '';
+        _barangayController.text = placemark.subLocality ?? '';
+        _streetController.text = placemark.street ?? placemark.thoroughfare ?? '';
         _postalController.text = placemark.postalCode ?? '';
       });
     }
@@ -121,6 +124,39 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
                   const Center(
                     child: CircularProgressIndicator(color: AppColors.primaryOrange),
                   ),
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Selected Location',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_currentPosition.latitude.toStringAsFixed(6)}, ${_currentPosition.longitude.toStringAsFixed(6)}',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primaryOrange),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -130,6 +166,61 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryOrange.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.primaryOrange.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.location_on, color: AppColors.primaryOrange, size: 18),
+                            SizedBox(width: 8),
+                            Text('Location Summary', style: TextStyle(fontSize: 12, color: AppColors.primaryOrange, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_streetController.text.isNotEmpty)
+                          Text(
+                            _streetController.text,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          ),
+                        if (_streetController.text.isNotEmpty) const SizedBox(height: 4),
+                        if (_barangayController.text.isNotEmpty)
+                          Text(
+                            'Barangay ${_barangayController.text}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        if (_barangayController.text.isNotEmpty) const SizedBox(height: 2),
+                        Text(
+                          '${_cityController.text}, ${_provinceController.text}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        if (_postalController.text.isNotEmpty)
+                          Text(
+                            'Postal Code: ${_postalController.text}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '📍 ${_currentPosition.latitude.toStringAsFixed(4)}, ${_currentPosition.longitude.toStringAsFixed(4)}',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                    _buildTextField(_labelController, 'Address Label (e.g. Home, Office)', Icons.label),
                    const SizedBox(height: 12),
                    _buildTextField(_fullNameController, 'Full Name', Icons.person),
@@ -141,6 +232,8 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
                        Expanded(child: _buildTextField(_cityController, 'City', Icons.location_city)),
                      ],
                    ),
+                   const SizedBox(height: 12),
+                   _buildTextField(_barangayController, 'Barangay', Icons.location_on),
                    const SizedBox(height: 12),
                    _buildTextField(_streetController, 'Street Address / Building / House No.', Icons.home),
                    const SizedBox(height: 12),
@@ -196,7 +289,7 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
       region: '',
       province: _provinceController.text,
       city: _cityController.text,
-      barangay: '',
+      barangay: _barangayController.text,
       streetAddress: _streetController.text,
       postalCode: _postalController.text,
       latitude: _currentPosition.latitude,
@@ -205,6 +298,8 @@ class _MapAddressPickerPageState extends State<MapAddressPickerPage> {
     );
 
     print('Saving address: ${address.fullName}, ${address.streetAddress}');
+    print('Barangay: ${address.barangay}');
+    print('Coordinates: Lat ${address.latitude}, Lng ${address.longitude}');
     Navigator.pop(context, address);
   }
 }

@@ -54,7 +54,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (user != null && user.addresses.isNotEmpty) {
       _selectedAddress = user.addresses.firstWhere((a) => a.isDefault, orElse: () => user.addresses.first);
-      _addressController.text = _selectedAddress?.fullAddress ?? '';
+      _addressController.text = _selectedAddress?.conciseAddress ?? '';
     }
   }
 
@@ -66,10 +66,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
     );
 
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         _selectedAddress = result;
-        _addressController.text = result.fullAddress;
+        _addressController.text = result.conciseAddress;
       });
     }
   }
@@ -83,7 +83,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.dispose();
   }
 
-  void _placeOrder() {
+  void _placeOrder() async {
     final cartProvider = context.read<CartProvider>();
     if (_nameController.text.isEmpty || _addressController.text.isEmpty || _contactController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,7 +133,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     // Save to Firestore
     if (user != null) {
-      FirestoreService().createOrder(user.userId, order);
+      try {
+        await FirestoreService().createOrder(user.userId, order);
+        print('Order saved to Firestore: $orderId');
+      } catch (e) {
+        print('Error saving order: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save order: $e')),
+        );
+        return;
+      }
     }
 
     // Add order to OrdersProvider
@@ -583,9 +592,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-               Text(
-                _selectedAddress?.conciseAddress ?? 'Select delivery address',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              const Text(
+                'Total',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
               Text(
                 '₱$total',

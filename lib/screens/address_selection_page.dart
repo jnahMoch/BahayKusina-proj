@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/address_model.dart';
 import '../providers/auth_provider.dart';
-import 'add_edit_address_page.dart';
+import 'map_address_picker_page.dart';
 
 class AddressSelectionPage extends StatelessWidget {
   const AddressSelectionPage({super.key});
@@ -54,58 +54,63 @@ class AddressSelectionPage extends StatelessWidget {
   }
 
   Widget _buildAddressItem(BuildContext context, AddressModel address, Color primaryOrange) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.radio_button_checked, color: primaryOrange, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  address.fullName,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  address.streetAddress,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                Text(
-                  '${address.barangay}, ${address.city}, ${address.province},',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                Text(
-                  '${address.region}, ${address.postalCode}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                if (address.isDefault)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: primaryOrange),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: Text(
-                      'Default',
-                      style: TextStyle(color: primaryOrange, fontSize: 10),
-                    ),
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(context, address);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.radio_button_checked, color: primaryOrange, size: 24),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    address.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    address.streetAddress,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    '${address.barangay}, ${address.city}, ${address.province},',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    '${address.region}, ${address.postalCode}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  if (address.isDefault)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: primaryOrange),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                      child: Text(
+                        'Default',
+                        style: TextStyle(color: primaryOrange, fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: () => _editAddress(context, address),
-            child: const Text('Edit', style: TextStyle(color: Colors.grey)),
-          ),
-        ],
+            TextButton(
+              onPressed: () => _editAddress(context, address),
+              child: const Text('Edit', style: TextStyle(color: Colors.grey)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -138,7 +143,7 @@ class AddressSelectionPage extends StatelessWidget {
   Future<void> _addNewAddress(BuildContext context) async {
     final result = await Navigator.push<AddressModel>(
       context,
-      MaterialPageRoute(builder: (context) => const AddEditAddressPage()),
+      MaterialPageRoute(builder: (context) => const MapAddressPickerPage()),
     );
 
     if (result != null) {
@@ -155,7 +160,11 @@ class AddressSelectionPage extends StatelessWidget {
         updatedAddresses.add(result);
         print('Updating profile with ${updatedAddresses.length} addresses');
         await authProvider.updateProfile(addresses: updatedAddresses);
-        print('Profile updated');
+        print('Profile updated, addresses in provider: ${authProvider.currentUser?.addresses.length}');
+        // Return the newly added address to the checkout page
+        if (context.mounted) {
+          Navigator.pop(context, result);
+        }
       }
     }
   }
@@ -163,7 +172,7 @@ class AddressSelectionPage extends StatelessWidget {
   Future<void> _editAddress(BuildContext context, AddressModel address) async {
     final result = await Navigator.push<AddressModel>(
       context,
-      MaterialPageRoute(builder: (context) => AddEditAddressPage(address: address)),
+      MaterialPageRoute(builder: (context) => MapAddressPickerPage(initialAddress: address)),
     );
 
     if (result != null) {
@@ -180,6 +189,10 @@ class AddressSelectionPage extends StatelessWidget {
           }
           updatedAddresses[index] = result;
           await authProvider.updateProfile(addresses: updatedAddresses);
+          // Return the edited address to the checkout page
+          if (context.mounted) {
+            Navigator.pop(context, result);
+          }
         }
       }
     }

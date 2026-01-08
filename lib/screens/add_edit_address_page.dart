@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/address_model.dart';
-import 'location_picker_page.dart';
+import 'map_address_picker_page.dart';
 
 class AddEditAddressPage extends StatefulWidget {
   final AddressModel? address;
@@ -15,7 +15,6 @@ class AddEditAddressPage extends StatefulWidget {
 
 class _AddEditAddressPageState extends State<AddEditAddressPage> {
   late TextEditingController _nameController;
-
   late TextEditingController _postalController;
   late TextEditingController _streetController;
 
@@ -23,6 +22,8 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
   String? _selectedProvince;
   String? _selectedCity;
   String? _selectedBarangay;
+  double? _latitude;
+  double? _longitude;
   
   bool _isDefault = false;
   String _label = 'Home';
@@ -31,7 +32,6 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.address?.fullName ?? '');
-
     _postalController = TextEditingController(text: widget.address?.postalCode ?? '');
     _streetController = TextEditingController(text: widget.address?.streetAddress ?? '');
     
@@ -39,6 +39,8 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
     _selectedProvince = widget.address?.province;
     _selectedCity = widget.address?.city;
     _selectedBarangay = widget.address?.barangay;
+    _latitude = widget.address?.latitude;
+    _longitude = widget.address?.longitude;
     
     _isDefault = widget.address?.isDefault ?? widget.isDefaultInitially;
     _label = widget.address?.label ?? 'Home';
@@ -54,25 +56,40 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
   }
 
   Future<void> _pickLocation() async {
-    final result = await Navigator.push<Map<String, String?>>(
+    final result = await Navigator.push<AddressModel>(
       context,
-      MaterialPageRoute(builder: (context) => const LocationPickerPage()),
+      MaterialPageRoute(
+        builder: (context) => MapAddressPickerPage(initialAddress: widget.address),
+      ),
     );
 
     if (result != null) {
       setState(() {
-        _selectedRegion = result['region'];
-        _selectedProvince = result['province'];
-        _selectedCity = result['city'];
-        _selectedBarangay = result['barangay'];
+        _nameController.text = result.fullName;
+        _selectedRegion = result.region;
+        _selectedProvince = result.province;
+        _selectedCity = result.city;
+        _selectedBarangay = result.barangay;
+        _streetController.text = result.streetAddress;
+        _postalController.text = result.postalCode;
+        _latitude = result.latitude;
+        _longitude = result.longitude;
+        _label = result.label;
       });
     }
   }
 
   void _submit() {
-    if (_nameController.text.isEmpty || _selectedBarangay == null) {
+    if (_nameController.text.isEmpty || _streetController.text.isEmpty || _selectedCity == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all required fields')),
+        const SnackBar(content: Text('Please fill in all required fields and pick location from map')),
+      );
+      return;
+    }
+
+    if (_latitude == null || _longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select location from map to get coordinates')),
       );
       return;
     }
@@ -88,8 +105,8 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
       barangay: _selectedBarangay ?? '',
       streetAddress: _streetController.text,
       postalCode: _postalController.text,
-      latitude: widget.address?.latitude ?? 0.0,
-      longitude: widget.address?.longitude ?? 0.0,
+      latitude: _latitude ?? 0.0,
+      longitude: _longitude ?? 0.0,
       isDefault: _isDefault,
     );
 
@@ -205,9 +222,9 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
   }
 
   Widget _buildLocationSelector() {
-    final String locationText = _selectedBarangay != null
+    final String locationText = _selectedCity != null
         ? '$_selectedRegion, $_selectedProvince, $_selectedCity, $_selectedBarangay'
-        : 'Region, Province, City, Barangay';
+        : 'Tap to select location on map';
         
     return InkWell(
       onTap: _pickLocation,
@@ -222,14 +239,14 @@ class _AddEditAddressPageState extends State<AddEditAddressPage> {
               child: Text(
                 locationText,
                 style: TextStyle(
-                  color: _selectedBarangay != null ? Colors.black87 : Colors.grey.shade400,
+                  color: _selectedCity != null ? Colors.black87 : Colors.grey.shade400,
                   fontSize: 16,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
+            const Icon(Icons.map_outlined, color: Color(0xFFFF6B00)),
           ],
         ),
       ),
