@@ -39,7 +39,7 @@ class _HomePageState extends State<HomePage> {
           'Classic Filipino breakfast with garlic rice, egg, and choice of meat.',
       price: 120.0,
       left: 15,
-      imageUrl: 'https://images.unsplash.com/photo-1626074353765-517a681e40be',
+      imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400',
     ),
     const MealPackage(
       type: 'Lunch',
@@ -49,7 +49,7 @@ class _HomePageState extends State<HomePage> {
       desc: 'Savory chicken and pork adobo served over warm white rice.',
       price: 150.0,
       left: 10,
-      imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c',
+      imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
     ),
     const MealPackage(
       type: 'Dinner',
@@ -59,7 +59,7 @@ class _HomePageState extends State<HomePage> {
       desc: 'Sour tamarind soup with tender pork and local vegetables.',
       price: 180.0,
       left: 5,
-      imageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19',
+      imageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400',
     ),
     const MealPackage(
       type: 'Merienda',
@@ -69,7 +69,7 @@ class _HomePageState extends State<HomePage> {
       desc: 'Stir-fried noodles with crisp vegetables and savory toppings.',
       price: 90.0,
       left: 20,
-      imageUrl: 'https://images.unsplash.com/photo-1585032226651-759b368d7246',
+      imageUrl: 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400',
     ),
     const MealPackage(
       type: 'Dessert',
@@ -79,17 +79,26 @@ class _HomePageState extends State<HomePage> {
       desc: 'Rich and creamy custard with a caramelized sugar topping.',
       price: 75.0,
       left: 12,
-      imageUrl: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc2fe0a',
+      imageUrl: 'https://images.unsplash.com/photo-1551024601-bec78aea704b?w=400',
     ),
   ];
 
   @override
   void initState() {
     super.initState();
+    print('🏠 HomePage: initState called');
     // Start with fallback meals immediately so the page is never empty
     _allMeals = List.from(_fallbackMeals);
     _fetchMeals();
     _startRealtimeMealUpdates();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh meals when page becomes visible
+    print('🏠 HomePage: didChangeDependencies - refreshing meals');
+    _fetchMeals();
   }
 
   @override
@@ -101,20 +110,25 @@ class _HomePageState extends State<HomePage> {
   Future<void> _fetchMeals() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+    
+    print('🔄 HomePage: Manual refresh triggered');
 
     try {
       final meals = await _firestoreService.getMealPackages();
+      print('🔄 HomePage: Fetched ${meals.length} meals from Firestore');
       if (mounted) {
         setState(() {
           // If Firestore returns real data, update the list.
           // If it returns empty (e.g. offline), we keep the fallback meals.
           if (meals.isNotEmpty) {
             _allMeals = meals;
+            print('🔄 HomePage: Updated UI with ${meals.length} meals');
           }
           _isLoading = false;
         });
       }
     } catch (e) {
+      print('🔄 HomePage: Fetch error: $e');
       if (mounted) {
         setState(() {
           _allMeals = _fallbackMeals;
@@ -122,33 +136,40 @@ class _HomePageState extends State<HomePage> {
         });
       }
     }
+    
+    // Restart the real-time stream to ensure it's active
+    _startRealtimeMealUpdates();
   }
 
   void _startRealtimeMealUpdates() {
-    print('✓ Starting real-time meal updates for customers');
+    print('🏠 HomePage: Starting real-time meal updates stream');
 
     // Cancel any existing subscription
     _mealsSubscription?.cancel();
 
     _mealsSubscription = _firestoreService.streamAllMeals().listen(
       (meals) {
-        print('✓ Real-time update: Received ${meals.length} meals');
+        print('🏠 HomePage: REAL-TIME UPDATE RECEIVED! ${meals.length} meals');
+        for (var meal in meals) {
+          print('   📦 ${meal.title} by ${meal.vendor} (ID: ${meal.id})');
+        }
         if (mounted) {
           setState(() {
-            _allMeals = meals.isNotEmpty ? meals : _fallbackMeals;
+            if (meals.isNotEmpty) {
+              _allMeals = meals;
+              print('🏠 HomePage: UI updated with ${meals.length} meals');
+            } else {
+              print('🏠 HomePage: Empty list received, keeping current data');
+            }
           });
         }
       },
       onError: (error) {
-        print('✗ Error in real-time meal updates: $error');
-        // Keep showing fallback meals on error
-        if (mounted) {
-          setState(() {
-            _allMeals = _fallbackMeals;
-          });
-        }
+        print('🏠 HomePage: Stream ERROR: $error');
       },
     );
+    
+    print('🏠 HomePage: Stream subscription active');
   }
 
   @override
@@ -345,6 +366,20 @@ class _HomePageState extends State<HomePage> {
         ),
         Row(
           children: [
+            // Refresh button
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              onPressed: () {
+                print('🔄 Manual refresh button pressed');
+                _fetchMeals();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Refreshing meals...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              },
+            ),
             _buildHeaderIcon(context, Icons.notifications_none, true),
             const SizedBox(width: 8),
             _buildHeaderIcon(context, Icons.shopping_bag_outlined, false),

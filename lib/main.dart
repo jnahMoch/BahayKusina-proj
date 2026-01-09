@@ -10,6 +10,7 @@ import 'providers/orders_provider.dart';
 import 'providers/vendor_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/notification_service.dart';
+import 'services/firestore_service.dart';
 import 'models/auth_user.dart';
 import 'screens/home_page.dart';
 import 'screens/vendor_home_page.dart';
@@ -17,6 +18,9 @@ import 'screens/vendor_home_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  // Initialize Firestore with persistence for offline support
+  await FirestoreService.initialize();
 
   final authProvider = AuthProvider();
   // Auth state will be monitored by the authStateChanges listener
@@ -72,6 +76,7 @@ class AuthWrapper extends StatelessWidget {
 
       // Safety check: ensure user object is fully populated before navigating
       if (user == null) {
+        print('⚠️ AuthWrapper: isAuthenticated=true but user is null!');
         return const Scaffold(
           body: Center(
             child: CircularProgressIndicator(color: Color(0xFFFF6B00)),
@@ -79,9 +84,16 @@ class AuthWrapper extends StatelessWidget {
         );
       }
 
+      print('🏠 AuthWrapper BUILD:');
+      print('   email = ${user.email}');
+      print('   role = ${user.role}');
+      print('   isVendor = ${user.role == UserRole.vendor}');
+      
       if (user.role == UserRole.vendor) {
+        print('🏠 AuthWrapper: → VendorHomePage');
         return const VendorHomePage();
       }
+      print('🏠 AuthWrapper: → HomePage (Customer)');
       return const HomePage();
     }
 

@@ -26,6 +26,7 @@ class AuthProvider extends ChangeNotifier {
   AuthUser? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _loginInProgress = false; // Flag to prevent auth listener from overwriting during login
 
   static const String _roleKey = 'user_role';
   static const String _profileKey = 'cached_user_profile';
@@ -40,11 +41,18 @@ class AuthProvider extends ChangeNotifier {
 
   /// Helper to convert Firestore data and Firebase User to AuthUser
   AuthUser _createUser(firebase_auth.User user, Map<String, dynamic>? profile) {
-    AppLogger.info('_createUser called - User: ${user.email}, Profile keys: ${profile?.keys.toList()}');
+    print('👤 _createUser called for: ${user.email}');
+    print('   profile = $profile');
     
-    final roleStr =
-        profile?['role']?.toString().toLowerCase().trim() ?? 'customer';
+    final rawRole = profile?['role'];
+    final roleStr = rawRole?.toString().toLowerCase().trim() ?? 'customer';
     final role = roleStr == 'vendor' ? UserRole.vendor : UserRole.customer;
+    
+    print('   rawRole = $rawRole');
+    print('   roleStr = "$roleStr"');
+    print('   UserRole = $role');
+    
+    AppLogger.info('_createUser: rawRole=$rawRole, roleStr=$roleStr, finalRole=$role');
 
     // Cache the role whenever we have a confirmed profile
     if (profile != null && profile.containsKey('role')) {
@@ -54,33 +62,39 @@ class AuthProvider extends ChangeNotifier {
 
     var addressList = <AddressModel>[];
     if (profile?['addresses'] != null) {
-      AppLogger.info('Found addresses in profile: ${(profile!['addresses'] as List).length}');
+      AppLogger.info(
+        'Found addresses in profile: ${(profile!['addresses'] as List).length}',
+      );
       addressList = (profile['addresses'] as List)
           .map((a) => AddressModel.fromJson(a as Map<String, dynamic>))
           .toList();
     } else if (profile?['address'] != null && profile!['address'] is String) {
       AppLogger.info('Found legacy string address, converting to AddressModel');
-      addressList.add(AddressModel(
-        id: 'default',
-        label: 'Default',
-        fullName: profile['displayName'] ?? user.displayName ?? 'User',
-        phoneNumber: profile['phone'] ?? '',
-        region: '',
-        province: '',
-        city: '',
-        barangay: '',
-        streetAddress: profile['address'] as String,
-        postalCode: '',
-        latitude: 0.0,
-        longitude: 0.0,
-        isDefault: true,
-      ));
+      addressList.add(
+        AddressModel(
+          id: 'default',
+          label: 'Default',
+          fullName: profile['displayName'] ?? user.displayName ?? 'User',
+          phoneNumber: profile['phone'] ?? '',
+          region: '',
+          province: '',
+          city: '',
+          barangay: '',
+          streetAddress: profile['address'] as String,
+          postalCode: '',
+          latitude: 0.0,
+          longitude: 0.0,
+          isDefault: true,
+        ),
+      );
     } else {
       AppLogger.warning('No addresses found in profile for ${user.email}');
     }
-    
+
     final phoneNumber = profile?['phone']?.toString() ?? '';
-    AppLogger.info('Creating AuthUser - Phone: $phoneNumber, Addresses: ${addressList.length}');
+    AppLogger.info(
+      'Creating AuthUser - Phone: $phoneNumber, Addresses: ${addressList.length}',
+    );
 
     final authUser = AuthUser(
       userId: user.uid,
@@ -174,15 +188,19 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Login with email and password
-  Future<bool> login(
+  /// Returns the role string if successful, null if failed
+  Future<String?> login(
     String email,
     String password, {
     String? expectedRole,
   }) async {
     try {
       _isLoading = true;
+      _loginInProgress = true; // Prevent auth listener from interfering
       _errorMessage = null;
       notifyListeners();
+
+      print('🔐 LOGIN STARTED for: $email');
 
       final userCredential = await _firebaseAuth
           .signInWithEmailAndPassword(email: email, password: password)
@@ -197,35 +215,51 @@ class AuthProvider extends ChangeNotifier {
           );
 
       if (userCredential.user != null) {
+        print('🔐 Firebase auth successful for: ${userCredential.user!.email}');
+        
         // Try to fetch profile from Firestore with timeout
         Map<String, dynamic>? profile;
         try {
           profile = await FirestoreService()
               .getUserProfile(userCredential.user!.uid)
               .timeout(const Duration(seconds: 10));
-          
+
           if (profile != null) {
-            AppLogger.info('Login: Profile loaded successfully with ${(profile['addresses'] as List?)?.length ?? 0} addresses');
+            print('🔐 Firestore profile loaded: role=${profile['role']}');
+            AppLogger.info(
+              'Login: Profile loaded successfully with ${(profile['addresses'] as List?)?.length ?? 0} addresses',
+            );
+          } else {
+            print('🔐 Firestore returned null profile');
           }
         } catch (e) {
+          print('🔐 Firestore profile fetch failed: $e');
           AppLogger.warning(
             'Firestore profile fetch timed out/failed during login. Using role selection/cache: $e',
           );
         }
 
-        if (profile == null) {
-          final cachedRole = await _getCachedRole();
-          // If we have no network and no cache, use the role selected on the login screen
-          final fallbackRole =
-              expectedRole?.toLowerCase() ?? cachedRole ?? 'customer';
-          _currentUser = _createUser(userCredential.user!, {
-            'role': fallbackRole,
-          });
-          AppLogger.warning('Login: Using cached/default profile');
-        } else {
+        String finalRole;
+        
+        if (profile != null && profile['role'] != null) {
+          // USE FIRESTORE ROLE - this is the source of truth
+          finalRole = profile['role'].toString().toLowerCase().trim();
+          print('🔐 Using Firestore role: $finalRole');
+          
           final mergedProfile = await _mergeWithCachedProfile(profile);
           _currentUser = _createUser(userCredential.user!, mergedProfile);
           AppLogger.info('Login: Using Firestore profile data');
+        } else {
+          // Fallback: No Firestore profile, use expectedRole from login screen
+          finalRole = expectedRole?.toLowerCase() ?? 'customer';
+          print('🔐 No Firestore profile, using expectedRole: $finalRole');
+          
+          _currentUser = _createUser(userCredential.user!, {
+            'role': finalRole,
+            'email': userCredential.user!.email,
+            'displayName': userCredential.user!.displayName,
+          });
+          AppLogger.warning('Login: Using fallback role (no Firestore profile)');
         }
 
         // Cache profile data for faster subsequent loads
@@ -234,29 +268,35 @@ class AuthProvider extends ChangeNotifier {
             'email': _currentUser!.email,
             'displayName': _currentUser!.fullName,
             'phone': _currentUser!.phone,
-            'role': _currentUser!.role.toString().split('.').last,
-            'addresses': _currentUser!.addresses.map((a) => a.toJson()).toList(),
+            'role': finalRole,
+            'addresses': _currentUser!.addresses
+                .map((a) => a.toJson())
+                .toList(),
           });
         }
 
-        AppLogger.info(
-          'Login successful: ${_currentUser?.email} (Role: ${_currentUser?.role})',
-        );
+        print('🔐 LOGIN COMPLETE - Final role: $finalRole');
+        AppLogger.info('Login successful: ${_currentUser?.email} (Role: $finalRole)');
 
         _isLoading = false;
+        _loginInProgress = false;
         notifyListeners();
-        return true;
+        return finalRole;
       }
     } on firebase_auth.FirebaseAuthException catch (e, stackTrace) {
+      print('🔐 LOGIN FAILED: ${e.message}');
+      _loginInProgress = false;
       _errorMessage = AuthException.fromError(e, stackTrace).message;
     } catch (e, stackTrace) {
+      _loginInProgress = false;
       _errorMessage = 'Login failed: $e';
       AppLogger.error('Login error: $e\n$stackTrace');
     }
 
     _isLoading = false;
+    _loginInProgress = false; // Ensure flag is reset on any exit
     notifyListeners();
-    return false;
+    return null;
   }
 
   /// Sign up with email and password
@@ -288,8 +328,10 @@ class AuthProvider extends ChangeNotifier {
       if (userCredential.user != null) {
         // Create profile in Firestore with a timeout so we don't hang the UI forever
         try {
-          AppLogger.info('Creating user profile - Name: $fullName, Phone: $phone, Addresses: ${addresses.length}');
-          
+          AppLogger.info(
+            'Creating user profile - Name: $fullName, Phone: $phone, Addresses: ${addresses.length}',
+          );
+
           await Future.wait([
             userCredential.user!.updateDisplayName(fullName),
             FirestoreService().createUserProfile(
@@ -301,7 +343,7 @@ class AuthProvider extends ChangeNotifier {
               role: role.toString().split('.').last,
             ),
           ]).timeout(const Duration(seconds: 10));
-          
+
           AppLogger.info('User profile created successfully in Firestore');
         } catch (e) {
           AppLogger.warning(
@@ -317,8 +359,10 @@ class AuthProvider extends ChangeNotifier {
           'addresses': addresses.map((a) => a.toJson()).toList(),
           'role': role.toString().split('.').last,
         });
-        
-        AppLogger.info('Current user set - Phone: ${_currentUser?.phone}, Addresses: ${_currentUser?.addresses.length}');
+
+        AppLogger.info(
+          'Current user set - Phone: ${_currentUser?.phone}, Addresses: ${_currentUser?.addresses.length}',
+        );
 
         // Cache profile
         await _cacheProfile({
@@ -417,7 +461,9 @@ class AuthProvider extends ChangeNotifier {
           phone: phone,
           addresses: addresses,
         );
-        print('Profile updated locally, addresses: ${_currentUser!.addresses.length}');
+        print(
+          'Profile updated locally, addresses: ${_currentUser!.addresses.length}',
+        );
       }
 
       // Try to update Firebase display name
@@ -438,6 +484,18 @@ class AuthProvider extends ChangeNotifier {
             phone: phone,
             addresses: addresses?.map((a) => a.toJson()).toList(),
           );
+
+          // Cache the updated profile locally
+          await _cacheProfile({
+            'email': _currentUser!.email,
+            'displayName': _currentUser!.fullName,
+            'phone': _currentUser!.phone,
+            'role': _currentUser!.role.toString().split('.').last,
+            'addresses': _currentUser!.addresses
+                .map((a) => a.toJson())
+                .toList(),
+          });
+          AppLogger.info('Profile updated and cached successfully');
         } catch (e) {
           AppLogger.warning('Failed to update Firestore profile: $e');
           // Don't fail the whole operation, local state is updated
@@ -460,17 +518,25 @@ class AuthProvider extends ChangeNotifier {
   Future<void> checkAuthStatus() async {
     _isLoading = true;
     notifyListeners();
-    
+
     _firebaseAuth.authStateChanges().listen((firebase_auth.User? user) async {
+      // Skip processing if login is in progress to avoid overwriting user set by login()
+      if (_loginInProgress) {
+        AppLogger.info('Auth state changed but login in progress, skipping');
+        return;
+      }
+      
       if (user != null) {
         Map<String, dynamic>? profile;
         try {
           profile = await FirestoreService()
               .getUserProfile(user.uid)
               .timeout(const Duration(seconds: 10));
-          
+
           if (profile != null) {
-            AppLogger.info('Profile loaded from Firestore: ${profile['displayName']}');
+            AppLogger.info(
+              'Profile loaded from Firestore: ${profile['displayName']}',
+            );
           }
         } catch (e) {
           AppLogger.warning(
@@ -484,29 +550,30 @@ class AuthProvider extends ChangeNotifier {
 
           if (cachedProfile != null) {
             AppLogger.warning('Using cached profile for ${user.email}');
-            _currentUser = _createUser(
-              user,
-              {
-                'role': cachedRole ?? cachedProfile['role'] ?? 'customer',
-                'email': cachedProfile['email'] ?? user.email,
-                'displayName': cachedProfile['displayName'] ?? user.displayName,
-                'phone': cachedProfile['phone'] ?? '',
-                'addresses': cachedProfile['addresses'] is List
-                    ? cachedProfile['addresses']
-                    : [],
-              },
-            );
+            _currentUser = _createUser(user, {
+              'role': cachedRole ?? cachedProfile['role'] ?? 'customer',
+              'email': cachedProfile['email'] ?? user.email,
+              'displayName': cachedProfile['displayName'] ?? user.displayName,
+              'phone': cachedProfile['phone'] ?? '',
+              'addresses': cachedProfile['addresses'] is List
+                  ? cachedProfile['addresses']
+                  : [],
+            });
           } else {
             _currentUser = _createUser(
               user,
               cachedRole != null ? {'role': cachedRole} : null,
             );
-            AppLogger.warning('Using cached/default role only for ${user.email}');
+            AppLogger.warning(
+              'Using cached/default role only for ${user.email}',
+            );
           }
         } else {
           final mergedProfile = await _mergeWithCachedProfile(profile);
           _currentUser = _createUser(user, mergedProfile);
-          AppLogger.info('Profile fully loaded from Firestore (merged with cache if needed)');
+          AppLogger.info(
+            'Profile fully loaded from Firestore (merged with cache if needed)',
+          );
         }
 
         AppLogger.info(
@@ -516,7 +583,7 @@ class AuthProvider extends ChangeNotifier {
         _currentUser = null;
         AppLogger.info('User logged out');
       }
-      
+
       _isLoading = false;
       notifyListeners();
     });
@@ -559,9 +626,13 @@ class AuthProvider extends ChangeNotifier {
             'phone': cached['phone'] ?? '',
             'addresses': cached['addresses'] is List ? cached['addresses'] : [],
           });
-          AppLogger.warning('refreshUserProfile: Using cached profile for ${user.email}');
+          AppLogger.warning(
+            'refreshUserProfile: Using cached profile for ${user.email}',
+          );
         } else {
-          AppLogger.warning('refreshUserProfile: No profile found for ${user.email}');
+          AppLogger.warning(
+            'refreshUserProfile: No profile found for ${user.email}',
+          );
         }
       }
     } catch (e, stackTrace) {

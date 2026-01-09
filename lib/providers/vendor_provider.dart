@@ -50,7 +50,7 @@ class VendorProvider with ChangeNotifier {
       desc: 'Top selling breakfast package.',
       price: 120.0,
       left: 15,
-      imageUrl: 'https://images.unsplash.com/photo-1626074353765-517a681e40be',
+      imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400',
     ),
   ];
 

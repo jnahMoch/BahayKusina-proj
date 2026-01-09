@@ -86,6 +86,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _placeOrder() {
     final cartProvider = context.read<CartProvider>();
+
+    // Check if cart is empty
+    if (cartProvider.items.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Your cart is empty')));
+      return;
+    }
+
     if (_nameController.text.isEmpty ||
         _addressController.text.isEmpty ||
         _contactController.text.isEmpty) {
@@ -115,6 +124,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     // Get vendor info from the first item in the cart
     final firstItem = cartProvider.items[0].meal;
+    
+    print('📦 Creating order:');
+    print('   - Order ID: $orderId');
+    print('   - Vendor ID: ${firstItem.vendorId}');
+    print('   - Vendor Name: ${firstItem.vendor}');
+    print('   - Customer: ${_nameController.text}');
 
     // Create order
     final order = Order(
@@ -138,7 +153,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     // Save to Firestore
     if (user != null) {
-      FirestoreService().createOrder(user.userId, order);
+      print('📦 Saving order to Firestore for user: ${user.userId}');
+      FirestoreService()
+          .createOrder(user.userId, order)
+          .then((_) {
+            print('✅ Order saved to Firestore successfully');
+            debugPrint('Order saved to Firestore successfully');
+          })
+          .catchError((e) {
+            print('❌ Error saving order to Firestore: $e');
+            debugPrint('Error saving order to Firestore: $e');
+          });
+    } else {
+      print('⚠️ No user logged in, order not saved to Firestore');
+      debugPrint('Warning: No user logged in, order not saved to Firestore');
     }
 
     // Add order to OrdersProvider

@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../theme/app_colors.dart';
 import '../widgets/signup_text_field.dart';
 import '../utils/logger.dart';
+import '../main.dart' show AuthWrapper;
 import 'home_page.dart';
 import 'vendor_home_page.dart';
 import '../models/address_model.dart';
@@ -132,17 +133,11 @@ class _SignUpPageState extends State<SignUpPage> {
 
       if (success && mounted) {
         AppLogger.info('Signup successful. Redirecting user...');
-        if (role == UserRole.vendor) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const VendorHomePage()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomePage()),
-          );
-        }
+        // Navigate to AuthWrapper which will handle proper routing based on role
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const AuthWrapper()),
+          (route) => false,
+        );
       } else if (mounted) {
         final error =
             authProvider.errorMessage ?? 'Signup failed. Please try again.';

@@ -9,6 +9,7 @@ import '../utils/error_handler.dart';
 import '../providers/auth_provider.dart';
 import '../models/auth_user.dart';
 import '../utils/logger.dart';
+import '../main.dart' show AuthWrapper;
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
 import 'home_page.dart';
@@ -67,38 +68,22 @@ class _LoginPageState extends State<LoginPage> {
       'Attempting login for: ${_emailController.text} (Expected role: ${_selectedUserType == 1 ? "Vendor" : "Customer"})',
     );
 
-    final success = await authProvider.login(
+    final loginRole = await authProvider.login(
       ValidationUtils.sanitizeEmail(_emailController.text),
       _passwordController.text,
       expectedRole: _selectedUserType == 1 ? "Vendor" : "Customer",
     );
 
-    if (success && mounted) {
-      final user = authProvider.currentUser;
-      AppLogger.info('Login success. Detected role: ${user?.role}');
+    print('📱 LOGIN PAGE: Received role = "$loginRole"');
 
-      if (user?.role == UserRole.vendor) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const VendorHomePage()),
-        );
-      } else {
-        // If they selected Vendor but account is Customer
-        if (_selectedUserType == 1) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Note: This account is registered as a Customer. Redirecting to Customer home.',
-              ),
-              backgroundColor: Colors.blue,
-            ),
-          );
-        }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
-      }
+    if (loginRole != null && mounted) {
+      AppLogger.info('Login success. Role returned: $loginRole');
+      
+      // Clear all routes and go back to AuthWrapper which will handle routing
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const AuthWrapper()),
+        (route) => false,
+      );
     } else if (mounted) {
       final error =
           authProvider.errorMessage ??

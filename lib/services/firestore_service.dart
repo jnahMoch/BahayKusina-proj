@@ -12,6 +12,23 @@ class FirestoreService {
   FirestoreService._internal();
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  static bool _initialized = false;
+
+  /// Initialize Firestore with persistence settings for offline support
+  static Future<void> initialize() async {
+    if (_initialized) return;
+    try {
+      // Enable persistence for web (already enabled by default on mobile)
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      _initialized = true;
+      print('✓ FirestoreService: Initialized with persistence enabled');
+    } catch (e) {
+      print('⚠ FirestoreService: Could not enable persistence: $e');
+    }
+  }
 
   // Simple cache for vendor data
   final Map<String, List<order_models.Order>> _ordersCache = {};
@@ -38,23 +55,38 @@ class FirestoreService {
   // ===== MEALS COLLECTION =====
   Future<List<MealPackage>> getMealPackages() async {
     try {
-      final snapshot = await _db.collection('meals').get();
-      return snapshot.docs
+      print('🍽️ getMealPackages: Fetching from Firestore...');
+      
+      // Force fetch from server, not cache
+      final snapshot = await _db.collection('meals').get(
+        const GetOptions(source: Source.serverAndCache),
+      );
+      
+      print('🍽️ getMealPackages: Got ${snapshot.docs.length} meals');
+      
+      final meals = snapshot.docs
           .map(
-            (doc) => MealPackage(
-              id: doc.id,
-              type: doc['type'] ?? 'General',
-              title: doc['title'] ?? '',
-              vendor: doc['vendor'] ?? '',
-              vendorId: doc['vendorId'] ?? 'unknown_vendor',
-              desc: doc['desc'] ?? '',
-              price: (doc['price'] ?? 0).toDouble(),
-              left: (doc['left'] ?? 0).toInt(),
-              imageUrl: doc['imageUrl'] ?? '',
-            ),
+            (doc) {
+              final data = doc.data();
+              print('   📦 ${data['title']} by ${data['vendor']}');
+              return MealPackage(
+                id: doc.id,
+                type: data['type'] ?? 'General',
+                title: data['title'] ?? '',
+                vendor: data['vendor'] ?? '',
+                vendorId: data['vendorId'] ?? 'unknown_vendor',
+                desc: data['desc'] ?? '',
+                price: (data['price'] ?? 0).toDouble(),
+                left: (data['left'] ?? 0).toInt(),
+                imageUrl: data['imageUrl'] ?? '',
+              );
+            },
           )
           .toList();
+      
+      return meals;
     } catch (e) {
+      print('🍽️ getMealPackages: Error - $e');
       AppLogger.error('Error fetching meals: $e');
       return [];
     }
@@ -62,32 +94,45 @@ class FirestoreService {
 
   // Real-time stream of all meals (for customers to see new packages instantly)
   Stream<List<MealPackage>> streamAllMeals() {
-    print('✓ FirestoreService.streamAllMeals - Starting stream');
+    print('✓ FirestoreService.streamAllMeals - Starting stream on meals collection');
 
     try {
+      // Use snapshots with includeMetadataChanges for better real-time updates
       return _db
           .collection('meals')
-          .snapshots()
+          .snapshots(includeMetadataChanges: true)
           .map((snapshot) {
-            print(
-              '✓ FirestoreService.streamAllMeals - Received ${snapshot.docs.length} meals',
-            );
+            final isFromCache = snapshot.metadata.isFromCache;
+            final hasPendingWrites = snapshot.metadata.hasPendingWrites;
+            
+            print('✓ FirestoreService.streamAllMeals - Received ${snapshot.docs.length} meals');
+            print('   isFromCache: $isFromCache, hasPendingWrites: $hasPendingWrites');
 
-            return snapshot.docs
+            final meals = snapshot.docs
                 .map(
-                  (doc) => MealPackage(
-                    id: doc.id,
-                    type: doc['type'] ?? 'General',
-                    title: doc['title'] ?? '',
-                    vendor: doc['vendor'] ?? '',
-                    vendorId: doc['vendorId'] ?? 'unknown_vendor',
-                    desc: doc['desc'] ?? '',
-                    price: (doc['price'] ?? 0).toDouble(),
-                    left: (doc['left'] ?? 0).toInt(),
-                    imageUrl: doc['imageUrl'] ?? '',
-                  ),
+                  (doc) {
+                    final data = doc.data();
+                    return MealPackage(
+                      id: doc.id,
+                      type: data['type'] ?? 'General',
+                      title: data['title'] ?? '',
+                      vendor: data['vendor'] ?? '',
+                      vendorId: data['vendorId'] ?? 'unknown_vendor',
+                      desc: data['desc'] ?? '',
+                      price: (data['price'] ?? 0).toDouble(),
+                      left: (data['left'] ?? 0).toInt(),
+                      imageUrl: data['imageUrl'] ?? '',
+                    );
+                  },
                 )
                 .toList();
+            
+            // Print each meal for debugging
+            for (var meal in meals) {
+              print('   📦 ${meal.title} (vendorId: ${meal.vendorId})');
+            }
+            
+            return meals;
           })
           .handleError((error) {
             print('✗ FirestoreService.streamAllMeals - Error: $error');
@@ -415,17 +460,18 @@ class FirestoreService {
     );
 
     try {
+      // Note: Removed orderBy to avoid composite index requirement on web
+      // Sorting is done in memory instead
       return _db
           .collection('orders')
           .where('vendorId', isEqualTo: vendorId)
-          .orderBy('orderDate', descending: true)
           .snapshots()
           .map((snapshot) {
             print(
               '✓ FirestoreService.streamVendorOrders - Received ${snapshot.docs.length} orders',
             );
 
-            return snapshot.docs.map((doc) {
+            final orders = snapshot.docs.map((doc) {
               final data = doc.data();
 
               try {
@@ -505,6 +551,10 @@ class FirestoreService {
                 rethrow;
               }
             }).toList();
+            
+            // Sort by orderDate in memory (newest first)
+            orders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
+            return orders;
           })
           .handleError((error) {
             print('✗ FirestoreService.streamVendorOrders - Error: $error');
@@ -627,7 +677,20 @@ class FirestoreService {
     try {
       AppLogger.info('FirestoreService.getUserProfile - Fetching profile for: $userId');
       
-      final doc = await _db.collection('users').doc(userId).get();
+      // Try server first, fall back to cache if offline
+      DocumentSnapshot<Map<String, dynamic>> doc;
+      try {
+        doc = await _db.collection('users').doc(userId).get(
+          const GetOptions(source: Source.server),
+        );
+      } catch (e) {
+        AppLogger.warning('Server unavailable, trying cache: $e');
+        // Fall back to cache
+        doc = await _db.collection('users').doc(userId).get(
+          const GetOptions(source: Source.cache),
+        );
+      }
+      
       if (doc.exists) {
         final data = doc.data();
         AppLogger.info('Profile found - Phone: ${data?['phone']}, Addresses: ${(data?['addresses'] as List?)?.length ?? 0}');

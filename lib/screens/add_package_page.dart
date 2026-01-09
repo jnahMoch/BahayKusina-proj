@@ -633,23 +633,26 @@ class _AddPackagePageState extends State<AddPackagePage> {
       }
 
       print('✓ Saving to Firestore...');
+      print('✓ Data to save: $data');
 
       // Save to Firestore
       if (!isEditing) {
         // Add new package
         data['createdAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance
+        print('🔥 Adding new package to meals collection...');
+        final docRef = await FirebaseFirestore.instance
             .collection('meals')
             .add(data)
             .timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 10),
               onTimeout: () {
                 print('⚠ Firestore add timeout, but data is queued for sync');
                 // Return a dummy doc reference - data will sync when online
                 throw TimeoutException('Save queued for sync');
               },
             );
-        print('✓ Package added successfully');
+        print('🔥 Package added successfully with ID: ${docRef.id}');
+        print('🔥 This should trigger real-time update on customer homepage!');
       } else {
         // Update existing package
         await FirebaseFirestore.instance

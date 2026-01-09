@@ -369,64 +369,6 @@ class _OrdersPageState extends State<OrdersPage> {
                 }),
                 const SizedBox(height: 16),
 
-                // Status Dropdown
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      canvasColor: Colors.white,
-                    ),
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      underline: Container(),
-                      value: _getStatusValue(order.status),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text('Pending'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'confirmed',
-                          child: Text('Confirmed'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'preparing',
-                          child: Text('Preparing'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'outForDelivery',
-                          child: Text('Out for Delivery'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'delivered',
-                          child: Text('Delivered'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'cancelled',
-                          child: Text('Cancelled'),
-                        ),
-                      ],
-                      onChanged: (_) {
-                        // Status is read-only for customers
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Order status is managed by vendor'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
                 // Track Order button
                 if (order.status == order_models.OrderStatus.outForDelivery) ...[
                   SizedBox(
@@ -498,10 +440,6 @@ class _OrdersPageState extends State<OrdersPage> {
       default:
         return status.toString().split('.').last.toUpperCase();
     }
-  }
-
-  String _getStatusValue(order_models.OrderStatus status) {
-    return status.toString().split('.').last;
   }
 
   String _formatDateFull(DateTime dateTime) {
