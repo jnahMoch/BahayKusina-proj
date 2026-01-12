@@ -9,6 +9,7 @@ import 'providers/cart_provider.dart';
 import 'providers/orders_provider.dart';
 import 'providers/vendor_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/local_package_provider.dart';
 import 'services/notification_service.dart';
 import 'services/firestore_service.dart';
 import 'models/auth_user.dart';
@@ -45,6 +46,7 @@ class BahayKusinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OrdersProvider()),
         ChangeNotifierProvider(create: (_) => VendorProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => LocalPackageProvider()),
       ],
       child: MaterialApp(
         title: 'BahayKusina',

@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import '../providers/auth_provider.dart';
-import '../providers/vendor_provider.dart';
-import '../services/firestore_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../providers/local_package_provider.dart';
+import '../models/meal_package.dart';
 
 class AddPackagePage extends StatefulWidget {
   final String? packageId;
@@ -595,159 +594,46 @@ class _AddPackagePageState extends State<AddPackagePage> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
     final vendorName = authProvider.currentUser?.fullName ?? "Nanay's Kitchen";
-    final bool isEditing =
-        widget.packageId != null &&
-        widget.packageId!.isNotEmpty &&
-        !widget.packageId!.startsWith('fallback_');
 
     try {
-      print('✓ Preparing to save package');
-      print('  - Vendor ID: $vendorId');
-      print('  - Package Title: ${_titleController.text}');
-      print('  - Price: ${_priceController.text}');
-      print('  - Stock: ${_stockController.text}');
+      final mealPackage = MealPackage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        type: _selectedCategory,
+        title: _titleController.text.trim(),
+        vendor: vendorName,
+        vendorId: vendorId,
+        desc: _descController.text.trim(),
+        price: double.parse(_priceController.text),
+        left: int.parse(_stockController.text),
+        imageUrl: _imageUrlController.text.trim().isNotEmpty
+            ? _imageUrlController.text.trim()
+            : 'https://images.unsplash.com/photo-1626074353765-517a681e40be?w=400',
+        packageItems: _packageItems,
+        isAvailable: _isAvailableForOrder,
+      );
 
-      final Map<String, dynamic> data = {
-        'title': _titleController.text.trim(),
-        'type': _selectedCategory,
-        'price': double.parse(_priceController.text),
-        'left': int.parse(_stockController.text),
-        'desc': _descController.text.trim(),
-        'vendorId': vendorId,
-        'vendor': vendorName,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      print('✓ Is Editing: $isEditing');
-
-      // Use image URL from text field - ALWAYS save it
-      final imageUrl = _imageUrlController.text.trim();
-      if (imageUrl.isNotEmpty) {
-        data['imageUrl'] = imageUrl;
-        print('✓ Using image URL: $imageUrl');
-      } else {
-        // Use placeholder for empty URLs (both new and editing)
-        data['imageUrl'] =
-            'https://images.unsplash.com/photo-1626074353765-517a681e40be?w=400';
-        print('✓ No image URL provided, using placeholder');
-      }
-
-      print('✓ Saving to Firestore...');
-      print('✓ Data to save: $data');
-
-      // Save to Firestore
-      if (!isEditing) {
-        // Add new package
-        data['createdAt'] = FieldValue.serverTimestamp();
-        print('🔥 Adding new package to meals collection...');
-        final docRef = await FirebaseFirestore.instance
-            .collection('meals')
-            .add(data)
-            .timeout(
-              const Duration(seconds: 10),
-              onTimeout: () {
-                print('⚠ Firestore add timeout, but data is queued for sync');
-                // Return a dummy doc reference - data will sync when online
-                throw TimeoutException('Save queued for sync');
-              },
-            );
-        print('🔥 Package added successfully with ID: ${docRef.id}');
-        print('🔥 This should trigger real-time update on customer homepage!');
-      } else {
-        // Update existing package
-        await FirebaseFirestore.instance
-            .collection('meals')
-            .doc(widget.packageId)
-            .update(data)
-            .timeout(
-              const Duration(seconds: 5),
-              onTimeout: () {
-                print(
-                  '⚠ Firestore update timeout, but data is queued for sync',
-                );
-                throw TimeoutException('Update queued for sync');
-              },
-            );
-        print('✓ Package updated: ${widget.packageId}');
-      }
+      await Provider.of<LocalPackageProvider>(context, listen: false).addPackage(mealPackage);
 
       if (mounted) {
-        // Show success message immediately
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              !isEditing
-                  ? "✓ Package Published Successfully!"
-                  : "✓ Package Updated Successfully!",
-            ),
+            content: Text("✓ Package saved locally!"),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 2),
           ),
         );
-
-        // Navigate back immediately - don't wait for refresh
-        print('✓ Package save completed, navigating back...');
         Navigator.pop(context);
-
-        // Clear all caches and force refresh to get the new data
-        final vendorProvider = Provider.of<VendorProvider>(
-          context,
-          listen: false,
-        );
-        FirestoreService().clearAllCache();
-        vendorProvider.clearCache();
-        // Force refresh to ensure we get the latest data from server
-        vendorProvider.refreshVendorData(vendorId, forceRefresh: true);
       }
-    } on TimeoutException catch (e) {
-      // Timeout is okay - data is queued for sync when online
-      print('⚠ Timeout occurred but data queued: $e');
+    } catch (e) {
+      print('✗ Error saving package locally: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              !isEditing
-                  ? "✓ Package saved (will sync when online)"
-                  : "✓ Package updated (will sync when online)",
-            ),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
+            content: Text("Error: ${e.toString()}"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
-        Navigator.pop(context);
-
-        final vendorProvider = Provider.of<VendorProvider>(
-          context,
-          listen: false,
-        );
-        vendorProvider.clearCache();
-        vendorProvider.refreshVendorData(vendorId);
-      }
-    } catch (e) {
-      print('✗ Error saving package: $e');
-      if (mounted) {
-        // Check if it's a timeout/offline error - still navigate back
-        final errorStr = e.toString().toLowerCase();
-        if (errorStr.contains('timeout') ||
-            errorStr.contains('offline') ||
-            errorStr.contains('unavailable')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("✓ Package saved (will sync when online)"),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          Navigator.pop(context);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Error: ${e.toString()}"),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
       }
     } finally {
       if (mounted) {

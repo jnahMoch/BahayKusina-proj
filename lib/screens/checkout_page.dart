@@ -629,9 +629,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _selectedAddress?.conciseAddress ?? 'Select delivery address',
-                style: const TextStyle(
+              const Text(
+                'Total Amount',
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),

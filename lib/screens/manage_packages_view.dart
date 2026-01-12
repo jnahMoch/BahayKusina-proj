@@ -2,12 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_package_page.dart';
-import '../providers/vendor_provider.dart';
-import '../providers/auth_provider.dart';
 import '../models/meal_package.dart';
-import '../services/firestore_service.dart';
+import '../providers/local_package_provider.dart';
 
 class ManagePackagesView extends StatelessWidget {
   const ManagePackagesView({super.key});
@@ -59,28 +56,22 @@ class ManagePackagesView extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Consumer<VendorProvider>(
+          child: Consumer<LocalPackageProvider>(
             builder: (context, provider, child) {
-              if (provider.meals.isEmpty) {
+              if (provider.packages.isEmpty) {
                 return _buildEmptyState();
               }
 
               return RefreshIndicator(
                 onRefresh: () async {
-                  final authProvider = Provider.of<AuthProvider>(
-                    context,
-                    listen: false,
-                  );
-                  final vendorId =
-                      authProvider.currentUser?.userId ?? 'vendor_nanay';
-                  provider.refreshVendorData(vendorId);
+                  await provider.loadPackages();
                 },
                 color: const Color(0xFFFF6B00),
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: provider.meals.length,
+                  itemCount: provider.packages.length,
                   itemBuilder: (context, index) {
-                    final meal = provider.meals[index];
+                    final meal = provider.packages[index];
                     return _VendorPackageCard(meal: meal);
                   },
                 ),
@@ -333,13 +324,7 @@ class _VendorPackageCard extends StatelessWidget {
 
   void _deletePackage(BuildContext context) {
     print('🗑️ Delete button pressed for: ${meal.title} (ID: ${meal.id})');
-    
-    // Get providers before showing dialog
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final vendorProvider = Provider.of<VendorProvider>(context, listen: false);
-    final vendorId = authProvider.currentUser?.userId ?? 'vendor_nanay';
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -358,8 +343,6 @@ class _VendorPackageCard extends StatelessWidget {
             onPressed: () async {
               print('🗑️ Confirm delete pressed');
               Navigator.pop(dialogContext);
-              
-              // Show loading indicator
               scaffoldMessenger.showSnackBar(
                 const SnackBar(
                   content: Row(
@@ -376,32 +359,14 @@ class _VendorPackageCard extends StatelessWidget {
                       Text("Deleting..."),
                     ],
                   ),
-                  duration: Duration(seconds: 10),
+                  duration: Duration(seconds: 2),
                 ),
               );
-              
               try {
-                // Delete from Firestore
-                print('🗑️ Meal ID: ${meal.id}');
-                print('🗑️ Vendor ID: $vendorId');
-                
-                if (meal.id.isNotEmpty && !meal.id.startsWith('fallback_')) {
-                  print('🗑️ Deleting from Firestore: ${meal.id}');
-                  await FirebaseFirestore.instance
-                      .collection('meals')
-                      .doc(meal.id)
-                      .delete();
-                  print('🗑️ Firestore delete successful');
-                } else {
-                  print('🗑️ Fallback meal - removing from local list only');
-                }
-
                 // Remove from local list immediately
-                vendorProvider.removeMeal(meal.id);
-                
-                // Also clear caches
-                FirestoreService().clearAllCache();
-                
+                final localProvider = Provider.of<LocalPackageProvider>(context, listen: false);
+                localProvider.packages.removeWhere((pkg) => pkg.id == meal.id);
+                await localProvider.loadPackages();
                 scaffoldMessenger.hideCurrentSnackBar();
                 scaffoldMessenger.showSnackBar(
                   SnackBar(

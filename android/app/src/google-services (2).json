@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "337492275214",
+    "project_id": "bahay-kusina-main",
+    "storage_bucket": "bahay-kusina-main.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:337492275214:android:2995cdf0ef44ed29a94c5f",
+        "android_client_info": {
+          "package_name": "com.Bahaykusina"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhte7JjjKWxSqJR6zmwfz9z4mJd2A-QQM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
